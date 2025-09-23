@@ -10,6 +10,20 @@ Enterprise-grade Retrieval-Augmented Generation platform for building intelligen
 - **Vector Database**: ChromaDB with persistent storage
 - **Embeddings**: Hugging Face Sentence Transformers
 
+### Architecture & Flow Diagrams
+
+<p align="center">
+  <img src="guides-md/architecture-flow-dia.png" alt="Architecture Diagram" style="max-width:100%;height:auto;" />
+</p>
+
+_Figure: High-level architecture — Frontend, Backend, Data Layer (ChromaDB), and AI Provider Layer (Ollama, OpenAI, Gemini)._
+
+<p align="center">
+  <img src="guides-md/system-flow-dia.png" alt="System Flow Diagram" style="max-width:100%;height:auto;" />
+</p>
+
+_Figure: System flow — user actions, provider selection, document ingestion, and query processing flows._
+
 ## Prerequisites
 
 - Node.js 18+
@@ -36,6 +50,7 @@ cp .env.example .env
 Configure your `.env` file based on your preferred AI provider:
 
 #### For Open Source (Ollama) - Default Setup
+
 ```env
 # Ollama Configuration
 OLLAMA_BASE_URL=http://localhost:11434
@@ -52,7 +67,9 @@ FASTAPI_BACKEND_URL=http://localhost:8000
 ```
 
 #### For OpenAI Integration
+
 Add these lines to your `.env`:
+
 ```env
 # OpenAI Configuration
 OPENAI_API_KEY=sk-proj-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
@@ -60,6 +77,7 @@ OPENAI_MODEL=gpt-4
 ```
 
 **Where to get OpenAI API Key:**
+
 1. Visit [OpenAI Platform](https://platform.openai.com/)
 2. Sign up or log in to your account
 3. Go to API Keys section
@@ -67,7 +85,9 @@ OPENAI_MODEL=gpt-4
 5. Copy the key (starts with `sk-proj-` or `sk-`)
 
 #### For Google Gemini Integration
+
 Add these lines to your `.env`:
+
 ```env
 # Gemini Configuration
 GEMINI_API_KEY=AIzaSyxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
@@ -75,6 +95,7 @@ GEMINI_MODEL=gemini-pro
 ```
 
 **Where to get Gemini API Key:**
+
 1. Visit [Google AI Studio](https://makersuite.google.com/app/apikey)
 2. Sign in with your Google account
 3. Click "Create API Key"
@@ -83,6 +104,7 @@ GEMINI_MODEL=gemini-pro
 ### 3. Install Required Services
 
 #### For Open Source Setup (Ollama)
+
 Install Ollama from [ollama.ai](https://ollama.ai) and pull your model:
 
 ```bash
@@ -95,23 +117,28 @@ ollama pull codellama:13b
 ```
 
 #### For Cloud Providers (OpenAI/Gemini)
+
 No additional installation needed - just ensure your API keys are valid.
 
 ### 4. Launch Application
 
 #### Using Docker (Recommended)
+
 ```bash
 docker-compose up --build
 ```
 
 #### Manual Development Setup
+
 Frontend:
+
 ```bash
 npm install
 npm run dev
 ```
 
 Backend (in separate terminal):
+
 ```bash
 cd backend
 pip install -r requirements.txt
@@ -127,6 +154,7 @@ uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ## Using the Application
 
 ### 1. Select AI Provider
+
 - Open the application in your browser
 - In the System Status panel, use the dropdown to select your AI provider:
   - **Open Source**: Uses local Ollama models
@@ -134,11 +162,13 @@ uvicorn main:app --host 0.0.0.0 --port 8000 --reload
   - **Gemini**: Uses Google's Gemini via API
 
 ### 2. Ingest Documents
+
 - Enter a URL in the Document Ingestion panel
 - Click "Ingest URL" to process and store the content
 - Wait for confirmation that documents are processed
 
 ### 3. Query Your Knowledge Base
+
 - Type questions in the Query Interface
 - Get AI-powered answers based on your ingested documents
 - View source references for each response
@@ -150,6 +180,7 @@ uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 **Endpoint**: `POST /api/v1/ingest`
 
 **Request Format**:
+
 ```json
 {
   "url": "https://example.com/documentation"
@@ -157,9 +188,11 @@ uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 **Parameters**:
+
 - `url` (string, required): Valid HTTP/HTTPS URL to scrape and ingest
 
 **Example**:
+
 ```bash
 curl -X POST "http://localhost:8000/api/v1/ingest" \
   -H "Content-Type: application/json" \
@@ -171,6 +204,7 @@ curl -X POST "http://localhost:8000/api/v1/ingest" \
 **Endpoint**: `POST /api/v1/ask`
 
 **Request Format**:
+
 ```json
 {
   "query": "What is Python used for?",
@@ -179,6 +213,7 @@ curl -X POST "http://localhost:8000/api/v1/ingest" \
 ```
 
 **Parameters**:
+
 - `query` (string, required): Your question about the ingested documents
 - `provider` (string, optional): AI provider to use
   - `"opensource"` - Uses Ollama (default)
@@ -186,14 +221,19 @@ curl -X POST "http://localhost:8000/api/v1/ingest" \
   - `"gemini"` - Uses Google Gemini
 
 **Response Format**:
+
 ```json
 {
   "answer": "Python is a versatile programming language...",
-  "sources": ["https://docs.python.org/3/tutorial/", "https://docs.python.org/3/library/"]
+  "sources": [
+    "https://docs.python.org/3/tutorial/",
+    "https://docs.python.org/3/library/"
+  ]
 }
 ```
 
 **Example**:
+
 ```bash
 curl -X POST "http://localhost:8000/api/v1/ask" \
   -H "Content-Type: application/json" \
@@ -205,6 +245,7 @@ curl -X POST "http://localhost:8000/api/v1/ask" \
 **Endpoint**: `GET /api/v1/health`
 
 **Response**:
+
 ```json
 {
   "backend": true,
@@ -214,6 +255,7 @@ curl -X POST "http://localhost:8000/api/v1/ask" \
 ```
 
 **Status Indicators**:
+
 - `backend`: FastAPI server status
 - `llm`: AI provider connectivity (Ollama/OpenAI/Gemini)
 - `vectorDB`: ChromaDB connection status
@@ -221,23 +263,28 @@ curl -X POST "http://localhost:8000/api/v1/ask" \
 ## Environment Variables Reference
 
 ### Core Configuration
+
 - `API_HOST`: Backend server host (default: `0.0.0.0`)
 - `API_PORT`: Backend server port (default: `8000`)
 - `FASTAPI_BACKEND_URL`: Frontend-to-backend connection URL
 
 ### Storage Configuration
+
 - `CHROMA_PERSIST_DIRECTORY`: ChromaDB data storage location
 - `EMBEDDING_MODEL_NAME`: Hugging Face model for text embeddings
 
 ### Ollama Configuration (Open Source)
+
 - `OLLAMA_BASE_URL`: Ollama server endpoint
 - `OLLAMA_MODEL`: Model name (e.g., `llama3:8b`, `mistral:7b`)
 
 ### OpenAI Configuration (Optional)
+
 - `OPENAI_API_KEY`: Your OpenAI API key (from platform.openai.com)
 - `OPENAI_MODEL`: Model to use (e.g., `gpt-4`, `gpt-3.5-turbo`)
 
 ### Google Gemini Configuration (Optional)
+
 - `GEMINI_API_KEY`: Your Gemini API key (from makersuite.google.com)
 - `GEMINI_MODEL`: Model to use (e.g., `gemini-pro`)
 
@@ -246,21 +293,25 @@ curl -X POST "http://localhost:8000/api/v1/ask" \
 ### Common Issues
 
 **"OpenAI API key not configured"**
+
 - Ensure `OPENAI_API_KEY` is set in your `.env` file
 - Verify the key starts with `sk-` and is valid
 - Check your OpenAI account has sufficient credits
 
 **"Gemini API key not configured"**
+
 - Ensure `GEMINI_API_KEY` is set in your `.env` file
 - Verify the key starts with `AIzaSy` and is valid
 - Ensure Gemini API is enabled in your Google Cloud project
 
 **"LLM Service" shows as disconnected**
+
 - For Ollama: Ensure Ollama is running and the model is pulled
 - For cloud providers: Check API keys and internet connectivity
 - Verify the model names match what's available
 
 **Documents not ingesting**
+
 - Check if the URL is accessible
 - Ensure the website allows scraping
 - Verify ChromaDB has write permissions to persist directory
