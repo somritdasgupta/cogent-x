@@ -3,7 +3,7 @@
 ## Overall System Architecture
 
 <div>
-<h3>Cogent RAG System Architecture</h3>
+<h3>cogent-x RAG System Architecture</h3>
 <div style="border: 1px solid #ccc; padding: 20px; margin: 10px 0; background: #f9f9f9;">
 
 ```

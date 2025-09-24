@@ -4,7 +4,7 @@
 
 ```mermaid
 flowchart TD
-    START([User Accesses Cogent]) --> CHECK{System Status Check}
+    START([User Accesses cogent-x]) --> CHECK{System Status Check}
     CHECK -->|All Systems Ready| READY[System Ready Badge]
     CHECK -->|Services Down| ERROR[Error Status Display]
 

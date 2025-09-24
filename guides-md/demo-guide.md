@@ -8,7 +8,7 @@
 
 **Setup**:
 
-1. Deploy Cogent on internal infrastructure
+1. Deploy cogent-x on internal infrastructure
 2. Ingest company policies, procedures, and documentation
 3. Enable employees to query knowledge base naturally
 
@@ -257,7 +257,7 @@ Storage Efficiency: 85% compression ratio for embeddings
 
 ## Cost Analysis Comparison
 
-### Traditional Solutions vs Cogent
+### Traditional Solutions vs cogent-x
 
 **Traditional Enterprise Search**:
 
@@ -265,7 +265,7 @@ Storage Efficiency: 85% compression ratio for embeddings
 - Microsoft SharePoint + AI: $25k-50k annually
 - Google Cloud Search: $8-12 per user/month
 
-**Cogent Deployment**:
+**cogent-x Deployment**:
 
 - Self-hosted (Ollama): $200-500/month server costs
 - OpenAI Integration: $0.002 per 1k tokens (~$20-100/month)
@@ -275,7 +275,7 @@ Storage Efficiency: 85% compression ratio for embeddings
 
 ```
 Traditional Solution: $50,000 initial + $25,000/year
-Cogent Solution: $5,000 initial + $1,200/year
+cogent-x Solution: $5,000 initial + $1,200/year
 
 3-Year Savings: $119,800 (89% cost reduction)
 Break-even Point: 2.4 months

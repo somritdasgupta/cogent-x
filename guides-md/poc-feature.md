@@ -3,12 +3,14 @@
 ## Quick Start Deployment
 
 ### Prerequisites
+
 - Docker & Docker Compose installed
 - Git for cloning repository
 - 8GB+ RAM recommended (for Ollama models)
 - Internet connection for AI provider APIs
 
 ### One-Command Deployment
+
 ```bash
 # Clone repository
 git clone <repository-url>
@@ -22,6 +24,7 @@ curl http://localhost:3000/api/v1/health
 ```
 
 **Access Points**:
+
 - Frontend: http://localhost:3000
 - Backend API: http://localhost:8000
 - Ollama: http://localhost:11434
@@ -29,16 +32,18 @@ curl http://localhost:3000/api/v1/health
 ## Environment Configuration
 
 ### 1. Copy Environment Template
+
 ```bash
 cp .env.example .env
 ```
 
 ### 2. Configure API Keys (Optional)
+
 ```bash
 # For OpenAI (optional)
 OPENAI_API_KEY=sk-your-openai-key-here
 
-# For Google Gemini (optional)  
+# For Google Gemini (optional)
 GEMINI_API_KEY=your-gemini-key-here
 
 # Ollama Configuration (pre-configured)
@@ -47,6 +52,7 @@ OLLAMA_MODEL=llama2
 ```
 
 ### 3. Advanced Configuration
+
 ```bash
 # Embedding Model
 EMBEDDING_MODEL_NAME=all-MiniLM-L6-v2
@@ -62,18 +68,19 @@ API_PORT=8000
 ## Service Architecture
 
 ### Container Overview
+
 ```yaml
 services:
   frontend:
     - Nginx server serving React build
     - Port: 3000
     - Depends on: backend
-    
+
   backend:
     - FastAPI Python server
     - Port: 8000
     - Depends on: ollama
-    
+
   ollama:
     - Local AI model server
     - Port: 11434
@@ -81,8 +88,10 @@ services:
 ```
 
 ### Data Persistence
+
 ```bash
 # Volumes created automatically
+# (search for volumes related to the project)
 docker volume ls | grep cogent
 cogent_ollama_data     # AI models storage
 ./chroma_db           # Vector database storage
@@ -93,6 +102,7 @@ cogent_ollama_data     # AI models storage
 ### 1. Cloud Deployment (AWS/GCP/Azure)
 
 **AWS EC2 Deployment**:
+
 ```bash
 # Launch EC2 instance (t3.large or larger)
 # Install Docker & Docker Compose
@@ -111,6 +121,7 @@ docker-compose up -d
 ```
 
 **Security Configuration**:
+
 ```bash
 # Use AWS Secrets Manager for API keys
 aws secretsmanager create-secret \
@@ -128,6 +139,7 @@ secrets:
 ### 2. Kubernetes Deployment
 
 **Kubernetes Manifests**:
+
 ```yaml
 # deployment.yaml
 apiVersion: apps/v1
@@ -145,16 +157,16 @@ spec:
         app: cogent-backend
     spec:
       containers:
-      - name: backend
-        image: cogent/backend:latest
-        ports:
-        - containerPort: 8000
-        env:
-        - name: OPENAI_API_KEY
-          valueFrom:
-            secretKeyRef:
-              name: api-keys
-              key: openai-key
+        - name: backend
+          image: cogent/backend:latest
+          ports:
+            - containerPort: 8000
+          env:
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: api-keys
+                  key: openai-key
 ---
 apiVersion: v1
 kind: Service
@@ -164,17 +176,18 @@ spec:
   selector:
     app: cogent-backend
   ports:
-  - port: 8000
-    targetPort: 8000
+    - port: 8000
+      targetPort: 8000
   type: ClusterIP
 ```
 
 ### 3. Docker Swarm Deployment
 
 **Stack Configuration**:
+
 ```yaml
 # docker-stack.yml
-version: '3.8'
+version: "3.8"
 
 services:
   frontend:
@@ -186,7 +199,7 @@ services:
       update_config:
         parallelism: 1
         delay: 10s
-      
+
   backend:
     image: cogent/backend:latest
     ports:
@@ -196,7 +209,7 @@ services:
     secrets:
       - openai_key
       - gemini_key
-    
+
 secrets:
   openai_key:
     external: true
@@ -207,6 +220,7 @@ secrets:
 ## Monitoring & Maintenance
 
 ### Health Checks
+
 ```bash
 # Backend health
 curl http://localhost:8000/api/v1/health
@@ -220,6 +234,7 @@ curl http://localhost:8000/api/v1/health
 ```
 
 ### Log Monitoring
+
 ```bash
 # View all service logs
 docker-compose logs -f
@@ -231,6 +246,7 @@ docker-compose logs -f ollama
 ```
 
 ### Resource Monitoring
+
 ```bash
 # Container resource usage
 docker stats
@@ -241,6 +257,7 @@ docker system df
 ```
 
 ### Backup Procedures
+
 ```bash
 # Backup vector database
 tar -czf chroma_backup_$(date +%Y%m%d).tar.gz ./chroma_db
@@ -253,6 +270,7 @@ docker run --rm -v cogent_ollama_data:/data -v $(pwd):/backup \
 ## Scaling Considerations
 
 ### Horizontal Scaling
+
 ```yaml
 # Scale backend instances
 docker-compose up -d --scale backend=3
@@ -266,6 +284,7 @@ upstream backend {
 ```
 
 ### Performance Optimization
+
 ```bash
 # Increase worker processes
 export UVICORN_WORKERS=4
@@ -280,18 +299,20 @@ export CUDA_VISIBLE_DEVICES=0
 ## Security Hardening
 
 ### Network Security
+
 ```yaml
 # Internal network isolation
 networks:
   cogent_internal:
     driver: bridge
     internal: true
-    
+
   cogent_external:
     driver: bridge
 ```
 
 ### Secret Management
+
 ```bash
 # Use Docker secrets
 echo "sk-your-openai-key" | docker secret create openai_key -
@@ -304,19 +325,20 @@ secrets:
 ```
 
 ### SSL/TLS Configuration
+
 ```nginx
 # nginx.conf for HTTPS
 server {
     listen 443 ssl;
     server_name your-domain.com;
-    
+
     ssl_certificate /etc/ssl/certs/cert.pem;
     ssl_certificate_key /etc/ssl/private/key.pem;
-    
+
     location / {
         proxy_pass http://frontend;
     }
-    
+
     location /api/ {
         proxy_pass http://backend;
     }
@@ -328,6 +350,7 @@ server {
 ### Common Issues
 
 **1. Ollama Service Not Starting**
+
 ```bash
 # Check Ollama logs
 docker-compose logs ollama
@@ -337,6 +360,7 @@ docker exec -it cogent_ollama ollama pull llama2
 ```
 
 **2. ChromaDB Connection Issues**
+
 ```bash
 # Reset database
 sudo rm -rf ./chroma_db
@@ -344,6 +368,7 @@ docker-compose restart backend
 ```
 
 **3. API Key Configuration**
+
 ```bash
 # Verify environment variables
 docker exec cogent_backend env | grep API_KEY
@@ -354,6 +379,7 @@ docker exec cogent_backend env | grep API_KEY
 ```
 
 **4. Memory Issues**
+
 ```bash
 # Check available memory
 free -h
@@ -363,6 +389,7 @@ export OLLAMA_MODEL=llama2:7b  # Smaller model
 ```
 
 ### Performance Tuning
+
 ```bash
 # Backend optimization
 export UVICORN_WORKERS=4
@@ -375,3 +402,4 @@ export CHROMA_SERVER_MAX_CONNECTIONS=10
 # Frontend optimization
 export NODE_ENV=production
 export VITE_BUILD_TARGET=es2020
+```

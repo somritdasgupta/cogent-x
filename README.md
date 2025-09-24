@@ -1,4 +1,4 @@
-# Cogent - Private RAG System
+# cogent-x - Private RAG System
 
 Enterprise-grade Retrieval-Augmented Generation platform for building intelligent, private knowledge bases. Supports multiple AI providers: Open Source LLMs (Ollama), OpenAI GPT, and Google Gemini.
 
@@ -12,17 +12,17 @@ Enterprise-grade Retrieval-Augmented Generation platform for building intelligen
 
 ### Architecture & Flow Diagrams
 
-<p align="center">
-  <img src="guides-md/architecture-flow-dia.png" alt="Architecture Diagram" style="max-width:100%;height:auto;" />
-</p>
+<!-- Interface preview on top, followed by two diagrams side-by-side on desktop and stacked on mobile -->
+<div style="display:flex;flex-direction:column;gap:1rem;align-items:center;">
+  <img src="public/interface-preview.png" alt="Interface Preview" style="max-width:100%;height:auto;border-radius:8px;" />
 
-_Figure: High-level architecture — Frontend, Backend, Data Layer (ChromaDB), and AI Provider Layer (Ollama, OpenAI, Gemini)._
+  <div style="display:flex;gap:1rem;flex-wrap:wrap;justify-content:center;max-width:1200px;width:100%">
+    <img src="guides-md/architecture-flow-dia.png" alt="Architecture Diagram" style="flex:1 1 480px;max-width:48%;height:auto;border-radius:8px;" />
+    <img src="guides-md/system-flow-dia.png" alt="System Flow Diagram" style="flex:1 1 480px;max-width:48%;height:auto;border-radius:8px;" />
+  </div>
+</div>
 
-<p align="center">
-  <img src="guides-md/system-flow-dia.png" alt="System Flow Diagram" style="max-width:100%;height:auto;" />
-</p>
-
-_Figure: System flow — user actions, provider selection, document ingestion, and query processing flows._
+_Figure: Interface preview (top). Architecture and System Flow diagrams (below). On narrow screens the diagrams stack vertically._
 
 ## Prerequisites
 
@@ -35,17 +35,18 @@ _Figure: System flow — user actions, provider selection, document ingestion, a
 ### 1. Clone Repository
 
 ```bash
-git clone https://github.com/somritdasgupta/cogent.git
-cd cogent
+git clone https://github.com/somritdasgupta/cogent-x.git
+cd cogent-x
 ```
 
-### 2. Environment Setup
-
-Copy the environment file:
-
-```bash
-cp .env.example .env
-```
+            <a
+              href="https://github.com/somritdasgupta/cogent-x"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-primary transition-colors"
+            >
+              Source Code
+            </a>
 
 Configure your `.env` file based on your preferred AI provider:
 
@@ -82,7 +83,7 @@ OPENAI_MODEL=gpt-4
 2. Sign up or log in to your account
 3. Go to API Keys section
 4. Click "Create new secret key"
-5. Copy the key (starts with `sk-proj-` or `sk-`)
+5. Copy the key
 
 #### For Google Gemini Integration
 
@@ -99,7 +100,7 @@ GEMINI_MODEL=gemini-pro
 1. Visit [Google AI Studio](https://makersuite.google.com/app/apikey)
 2. Sign in with your Google account
 3. Click "Create API Key"
-4. Copy the key (starts with `AIzaSy`)
+4. Copy the key
 
 ### 3. Install Required Services
 
@@ -349,6 +350,6 @@ MIT License - see LICENSE file for details
 
 **Developed by**: [Somrit Dasgupta](https://github.com/somritdasgupta)
 
-**Source Code**: [github.com/somritdasgupta/cogent](https://github.com/somritdasgupta/cogent)
+**Source Code**: [github.com/somritdasgupta/cogent-x](https://github.com/somritdasgupta/cogent-x)
 
-**Issues & Support**: [GitHub Issues](https://github.com/somritdasgupta/cogent/issues)
+**Issues & Support**: [GitHub Issues](https://github.com/somritdasgupta/cogent-x/issues)
