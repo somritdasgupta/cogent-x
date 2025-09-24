@@ -1,4 +1,4 @@
-# cogent-x - Private RAG System
+# cogent-x
 
 Enterprise-grade Retrieval-Augmented Generation platform for building intelligent, private knowledge bases. Supports multiple AI providers: Open Source LLMs (Ollama), OpenAI GPT, and Google Gemini.
 
@@ -14,7 +14,7 @@ Enterprise-grade Retrieval-Augmented Generation platform for building intelligen
 
 <!-- Interface preview on top, followed by two diagrams side-by-side on desktop and stacked on mobile -->
 <div style="display:flex;flex-direction:column;gap:1rem;align-items:center;">
-  <img src="public/interface-preview.png" alt="Interface Preview" style="max-width:100%;height:auto;border-radius:8px;" />
+  <img src="guides-md/interface-preview.png" alt="Interface Preview" style="max-width:100%;height:auto;border-radius:8px;" />
 
   <div style="display:flex;gap:1rem;flex-wrap:wrap;justify-content:center;max-width:1200px;width:100%">
     <img src="guides-md/architecture-flow-dia.png" alt="Architecture Diagram" style="flex:1 1 480px;max-width:48%;height:auto;border-radius:8px;" />
