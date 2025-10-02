@@ -1148,13 +1148,16 @@ async def transcribe_audio(file: UploadFile = File(...)):
     Supports: mp3, mp4, mpeg, mpga, m4a, wav, webm, flac, ogg
     """
     try:
-        # Check if ffmpeg is available
+        # Check if ffmpeg is available - graceful failure
         import shutil
         if not shutil.which("ffmpeg"):
-            raise HTTPException(
-                status_code=503,
-                detail="Speech-to-text unavailable: ffmpeg not installed on server. Contact administrator."
-            )
+            logger.warning("⚠️ Transcription request failed: ffmpeg not found")
+            return {
+                "text": "",
+                "success": False,
+                "error": "Speech-to-text is temporarily unavailable. The server is missing required audio processing tools.",
+                "error_code": "FFMPEG_NOT_FOUND"
+            }
 
         # Check if file is provided
         if not file:
@@ -1231,11 +1234,23 @@ async def transcribe_audio(file: UploadFile = File(...)):
             # Reuse cached model for instant transcription
             model = whisperx_model
 
-            # Load and transcribe audio
+            # Load and transcribe audio with ffmpeg error handling
             with open("whisperx_debug.log", "a") as f:
                 f.write(f"\n[{temp_file_path}] Loading audio...\n")
 
-            audio = whisperx.load_audio(str(temp_file_path))
+            try:
+                audio = whisperx.load_audio(str(temp_file_path))
+            except Exception as audio_load_error:
+                logger.error(
+                    f"Failed to load audio (ffmpeg issue): {audio_load_error}")
+                if temp_file_path.exists():
+                    temp_file_path.unlink()
+                return {
+                    "text": "",
+                    "success": False,
+                    "error": "Failed to process audio file. Audio format may be unsupported or corrupted.",
+                    "error_code": "AUDIO_LOAD_FAILED"
+                }
 
             with open("whisperx_debug.log", "a") as f:
                 f.write(
@@ -1281,18 +1296,24 @@ async def transcribe_audio(file: UploadFile = File(...)):
             if temp_file_path.exists():
                 temp_file_path.unlink()
 
-            raise HTTPException(
-                status_code=500,
-                detail=f"Transcription failed: {str(transcribe_error)}"
-            )
+            # Return graceful error response instead of raising exception
+            return {
+                "text": "",
+                "success": False,
+                "error": "Transcription service encountered an error. Please try again.",
+                "error_code": "TRANSCRIPTION_FAILED"
+            }
 
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Audio processing failed: {str(e)}"
-        )
+        logger.error(f"Transcription endpoint error: {str(e)}")
+        return {
+            "text": "",
+            "success": False,
+            "error": "An unexpected error occurred during audio processing.",
+            "error_code": "UNEXPECTED_ERROR"
+        }
 
 
 @app.post("/api/v1/text-to-speech")
@@ -1397,6 +1418,7 @@ async def text_to_speech(text: str = Form(...)):
         text = natural_text
 
         # Use Edge TTS (Microsoft AI voices - best quality, no fallbacks)
+        temp_audio_path = None
         try:
             import edge_tts
             import asyncio
@@ -1444,12 +1466,19 @@ async def text_to_speech(text: str = Form(...)):
                     "X-TTS-Style": "conversational"
                 }
             )
-
         except Exception as e:
             logger.error(f"Edge TTS failed: {str(e)}")
+            # Clean up temp file if it exists
+            try:
+                if temp_audio_path is not None and temp_audio_path.exists():
+                    temp_audio_path.unlink()
+            except:
+                pass
+                pass
+
             raise HTTPException(
-                status_code=500,
-                detail=f"Text-to-speech failed: {str(e)}. Please check internet connection."
+                status_code=503,
+                detail="Text-to-speech is temporarily unavailable. Please check your internet connection and try again."
             )
 
     except HTTPException:
@@ -1458,7 +1487,7 @@ async def text_to_speech(text: str = Form(...)):
         logger.error(f"TTS error: {str(e)}")
         raise HTTPException(
             status_code=500,
-            detail=f"Text-to-speech failed: {str(e)}"
+            detail="Text-to-speech service encountered an error. Please try again later."
         )
 
 
@@ -1799,7 +1828,14 @@ if __name__ == "__main__":
     print(f"SentenceTransformer available: {SentenceTransformer is not None}")
     print(f"Configuration loaded: {CURRENT_CONFIG is not None}")
     print("=" * 60)
-    print("Server will start on: http://0.0.0.0:8000")
-    print("API docs available at: http://localhost:8000/api/docs")
+
+    # Get port from environment variable (for Render/Docker)
+    port = int(os.getenv("PORT", 8000))
+    host = os.getenv("HOST", "0.0.0.0")
+
+    print(f"Server will start on: http://{host}:{port}")
+    print(f"API docs available at: http://localhost:{port}/api/docs")
+    print(f"Health check: http://localhost:{port}/api/v1/health")
     print("=" * 60)
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+
+    uvicorn.run(app, host=host, port=port)

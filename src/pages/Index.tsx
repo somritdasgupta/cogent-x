@@ -3,8 +3,91 @@ import { UnifiedSettingsPanel } from "@/components/UnifiedSettingsPanel";
 import { Github, BookOpen, Code, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getApiDocsUrl } from "@/config/api";
+import { useEffect, useState } from "react";
 
 const Index = () => {
+  const [systemStatus, setSystemStatus] = useState<{
+    backend: boolean;
+    llm: boolean;
+    vectorDB: boolean;
+  }>({
+    backend: false,
+    llm: false,
+    vectorDB: false,
+  });
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Function to check system health
+  const checkSystemHealth = async () => {
+    try {
+      const response = await fetch("/api/v1/health");
+      const data = await response.json();
+      setSystemStatus({
+        backend: data.backend === true,
+        llm: data.llm === true,
+        vectorDB: data.vectorDB === true,
+      });
+      setIsLoading(false);
+    } catch (error) {
+      console.error("Failed to check system health:", error);
+      setSystemStatus({
+        backend: false,
+        llm: false,
+        vectorDB: false,
+      });
+      setIsLoading(false);
+    }
+  };
+
+  // Check health on mount and every 60 seconds
+  useEffect(() => {
+    checkSystemHealth();
+    const interval = setInterval(checkSystemHealth, 60000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Compute status text and color based on health
+  const getStatusInfo = () => {
+    if (isLoading) {
+      return {
+        text: "Checking...",
+        color: "yellow",
+        pingColor: "bg-yellow-400",
+        dotColor: "bg-yellow-500",
+      };
+    }
+
+    const allOnline =
+      systemStatus.backend && systemStatus.llm && systemStatus.vectorDB;
+    const allOffline =
+      !systemStatus.backend && !systemStatus.llm && !systemStatus.vectorDB;
+
+    if (allOnline) {
+      return {
+        text: "All Good",
+        color: "green",
+        pingColor: "bg-green-400",
+        dotColor: "bg-green-500",
+      };
+    } else if (allOffline) {
+      return {
+        text: "Down",
+        color: "red",
+        pingColor: "bg-red-400",
+        dotColor: "bg-red-500",
+      };
+    } else {
+      return {
+        text: "Partial",
+        color: "yellow",
+        pingColor: "bg-yellow-400",
+        dotColor: "bg-yellow-500",
+      };
+    }
+  };
+
+  const statusInfo = getStatusInfo();
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <header className="border-b py-3 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md border-slate-200 dark:border-slate-800 sticky top-0 z-50">
@@ -34,13 +117,17 @@ const Index = () => {
                     "_blank"
                   )
                 }
-                title="View System Status"
+                title={`System Status: ${statusInfo.text}`}
               >
                 <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                  <span
+                    className={`animate-ping absolute inline-flex h-full w-full rounded-full ${statusInfo.pingColor} opacity-75`}
+                  ></span>
+                  <span
+                    className={`relative inline-flex rounded-full h-2 w-2 ${statusInfo.dotColor}`}
+                  ></span>
                 </span>
-                <span className="hidden sm:inline">Status</span>
+                <span className="hidden sm:inline">{statusInfo.text}</span>
               </Button>
               <Button
                 variant="outline"

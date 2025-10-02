@@ -274,6 +274,11 @@ export const UnifiedSettingsPanel = () => {
         title: "Configuration Saved",
         description: "Restart backend to apply changes",
       });
+
+      // Refresh status immediately after saving configuration
+      setTimeout(() => {
+        checkStatus();
+      }, 1000); // Small delay to let backend apply changes
     } catch (error) {
       setSaveStatus("error");
       const errorMessage =
