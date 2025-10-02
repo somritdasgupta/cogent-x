@@ -12,39 +12,45 @@ interface SystemStatus {
   vectorDB: boolean;
 }
 
-export const SystemStatusPanel = () => {
+export const SystemStatusPanel = ({ onConfigChange }: { onConfigChange?: number }) => {
   const [status, setStatus] = useState<SystemStatus>({
     backend: false,
     llm: false,
     vectorDB: false,
   });
 
-  // Uptime Robot status page URL - can be configured via environment variable
-  const uptimeStatusPageUrl =
-    import.meta.env.VITE_UPTIME_STATUS_PAGE || "https://status.uptimerobot.com";
+  // Uptime Robot status page URL - only show button if configured
+  const uptimeStatusPageUrl = import.meta.env.VITE_UPTIME_STATUS_PAGE;
+
+  const checkStatus = async () => {
+    try {
+      const response = await apiGet(API_ENDPOINTS.HEALTH);
+      if (response.ok) {
+        const data = await response.json();
+        setStatus(data);
+      }
+    } catch (error) {
+      console.error("Health check failed:", error);
+      setStatus({
+        backend: false,
+        llm: false,
+        vectorDB: false,
+      });
+    }
+  };
 
   useEffect(() => {
-    const checkStatus = async () => {
-      try {
-        const response = await apiGet(API_ENDPOINTS.HEALTH);
-        if (response.ok) {
-          const data = await response.json();
-          setStatus(data);
-        }
-      } catch (error) {
-        console.error("Health check failed:", error);
-        setStatus({
-          backend: false,
-          llm: false,
-          vectorDB: false,
-        });
-      }
-    };
-
     checkStatus();
     const interval = setInterval(checkStatus, 30000); // Check every 30s
     return () => clearInterval(interval);
   }, []);
+
+  // Re-check status immediately when config changes
+  useEffect(() => {
+    if (onConfigChange) {
+      checkStatus();
+    }
+  }, [onConfigChange]);
 
   const isSystemReady = status.backend && status.llm && status.vectorDB;
 
@@ -73,17 +79,20 @@ export const SystemStatusPanel = () => {
           )}
         </div>
 
-        <Button
-          variant="outline"
-          size="sm"
-          className="w-full"
-          onClick={handleOpenStatusPage}
-        >
-          <ExternalLink className="mr-2 h-4 w-4" />
-          View Uptime Status
-        </Button>
-
-        <Separator />
+        {uptimeStatusPageUrl && (
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full"
+              onClick={handleOpenStatusPage}
+            >
+              <ExternalLink className="mr-2 h-4 w-4" />
+              View Uptime Status
+            </Button>
+            <Separator />
+          </>
+        )}
 
         <div className="text-xs text-center font-medium text-muted-foreground">
           Component Status

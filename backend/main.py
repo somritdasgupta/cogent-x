@@ -841,21 +841,23 @@ Answer:"""
 
 
 # ============= Health Checks =============
-def check_ollama_health() -> bool:
+def check_ollama_health(session_config: Optional[Dict] = None) -> bool:
     """Check if any LLM service is available (Ollama, OpenAI, or Gemini)"""
+    config = session_config if session_config else CURRENT_CONFIG
+    
     # Check if OpenAI API key is configured
-    openai_key = CURRENT_CONFIG.get("openai_api_key", "").strip()
+    openai_key = config.get("openai_api_key", "").strip()
     if openai_key and len(openai_key) > 10 and "•" not in openai_key:
         return True
 
     # Check if Gemini API key is configured
-    gemini_key = CURRENT_CONFIG.get("gemini_api_key", "").strip()
+    gemini_key = config.get("gemini_api_key", "").strip()
     if gemini_key and len(gemini_key) > 10 and "•" not in gemini_key:
         return True
 
     # Check if Ollama is running
     try:
-        ollama_url = CURRENT_CONFIG.get(
+        ollama_url = config.get(
             "ollama_base_url", "http://localhost:11434")
         response = requests.get(f"{ollama_url}/api/tags", timeout=2)
         return response.status_code == 200
@@ -901,16 +903,21 @@ class QueryRequest(BaseModel):
 
 @app.get("/api/v1/health")
 @app.head("/api/v1/health")
-async def health_check():
-    """System health check"""
-    llm_status = check_ollama_health()
+async def health_check(x_session_id: Optional[str] = Header(None)):
+    """System health check - uses session config if session_id provided"""
+    session_config = None
+    if x_session_id:
+        session_config = session_manager.get_session_config(x_session_id)
+    
+    llm_status = check_ollama_health(session_config)
     db_status = check_vectordb_health()
 
     return {
         "backend": True,
         "llm": llm_status,
         "vectorDB": db_status,
-        "config_loaded": CURRENT_CONFIG is not None
+        "config_loaded": CURRENT_CONFIG is not None,
+        "session_active": x_session_id is not None
     }
 
 

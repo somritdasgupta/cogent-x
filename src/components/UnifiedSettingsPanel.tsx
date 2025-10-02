@@ -272,13 +272,12 @@ export const UnifiedSettingsPanel = () => {
       setSaveStatus("success");
       toast({
         title: "Configuration Saved",
-        description: "Restart backend to apply changes",
+        description: "Settings updated successfully",
       });
 
       // Refresh status immediately after saving configuration
-      setTimeout(() => {
-        checkStatus();
-      }, 1000); // Small delay to let backend apply changes
+      // No delay needed - check happens instantly
+      checkStatus();
     } catch (error) {
       setSaveStatus("error");
       const errorMessage =
