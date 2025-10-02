@@ -1,0 +1,186 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
+All colors MUST be HSL.
+*/
+
+@layer base {
+  :root {
+    --background: 220 27% 98%;
+    --foreground: 220 13% 9%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 220 13% 9%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 13% 9%;
+
+    --primary: 262 83% 58%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 220 13% 95%;
+    --secondary-foreground: 220 13% 9%;
+
+    --muted: 220 13% 95%;
+    --muted-foreground: 220 9% 46%;
+
+    --accent: 262 83% 96%;
+    --accent-foreground: 262 83% 15%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 262 83% 58%;
+
+    --ai-gradient: linear-gradient(135deg, hsl(262 83% 58%), hsl(285 85% 65%));
+    --success: 142 76% 36%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 38 92% 8%;
+    --info: 217 91% 60%;
+    --info-foreground: 0 0% 100%;
+
+    --radius: 0.5rem;
+
+    --sidebar-background: 0 0% 98%;
+
+    --sidebar-foreground: 240 5.3% 26.1%;
+
+    --sidebar-primary: 240 5.9% 10%;
+
+    --sidebar-primary-foreground: 0 0% 98%;
+
+    --sidebar-accent: 240 4.8% 95.9%;
+
+    --sidebar-accent-foreground: 240 5.9% 10%;
+
+    --sidebar-border: 220 13% 91%;
+
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+
+  .dark {
+    --background: 220 27% 4%;
+    --foreground: 220 27% 98%;
+
+    --card: 220 27% 6%;
+    --card-foreground: 220 27% 98%;
+
+    --popover: 220 27% 6%;
+    --popover-foreground: 220 27% 98%;
+
+    --primary: 262 83% 58%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 220 13% 14%;
+    --secondary-foreground: 220 27% 98%;
+
+    --muted: 220 13% 14%;
+    --muted-foreground: 220 9% 65%;
+
+    --accent: 262 83% 15%;
+    --accent-foreground: 262 83% 96%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 13% 14%;
+    --input: 220 13% 14%;
+    --ring: 262 83% 58%;
+
+    --ai-gradient: linear-gradient(135deg, hsl(262 83% 58%), hsl(285 85% 65%));
+    --success: 142 76% 36%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 38 92% 8%;
+    --info: 217 91% 60%;
+    --info-foreground: 0 0% 100%;
+    --sidebar-background: 240 5.9% 10%;
+    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-primary: 224.3 76.3% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+
+  /* Markdown prose styles */
+  .prose {
+    @apply text-foreground;
+  }
+  
+  .prose p {
+    @apply my-2;
+  }
+  
+  .prose h1, .prose h2, .prose h3, .prose h4 {
+    @apply font-semibold mt-4 mb-2;
+  }
+  
+  .prose h1 {
+    @apply text-xl;
+  }
+  
+  .prose h2 {
+    @apply text-lg;
+  }
+  
+  .prose h3 {
+    @apply text-base;
+  }
+  
+  .prose ul, .prose ol {
+    @apply my-2 ml-4;
+  }
+  
+  .prose li {
+    @apply my-1;
+  }
+  
+  .prose code {
+    @apply bg-muted px-1.5 py-0.5 rounded text-xs font-mono;
+  }
+  
+  .prose pre {
+    @apply bg-muted p-3 rounded-lg overflow-x-auto my-3;
+  }
+  
+  .prose pre code {
+    @apply bg-transparent p-0;
+  }
+  
+  .prose table {
+    @apply w-full border-collapse my-3;
+  }
+  
+  .prose th, .prose td {
+    @apply border border-border px-3 py-2 text-left;
+  }
+  
+  .prose th {
+    @apply bg-muted font-semibold;
+  }
+  
+  .prose blockquote {
+    @apply border-l-4 border-primary pl-4 italic my-3;
+  }
+  
+  .prose a {
+    @apply text-primary hover:underline;
+  }
+}

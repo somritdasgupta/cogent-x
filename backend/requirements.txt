@@ -1,0 +1,33 @@
+# Core API
+fastapi==0.104.1
+uvicorn==0.24.0
+pydantic==2.5.0
+python-multipart==0.0.6
+requests==2.31.0
+python-dotenv==1.0.0
+
+# Vector DB & Embeddings
+faiss-cpu==1.12.0
+sentence-transformers
+torch
+numpy>=1.24.0
+
+# Document Processing
+beautifulsoup4==4.12.2
+lxml==4.9.3
+html2text==2020.1.16
+
+# Voice Transcription (Fast & Free)
+whisperx
+ffmpeg-python
+
+# Text-to-Speech (Human-like voices)
+pyttsx3>=2.90  # Offline TTS with multiple voices
+gTTS>=2.5.0  # Google Text-to-Speech (fallback)
+pydub>=0.25.1  # Audio processing
+
+# AI Providers
+google-generativeai==0.3.2
+
+# Security
+cryptography==41.0.7

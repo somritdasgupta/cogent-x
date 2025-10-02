@@ -1,0 +1,45 @@
+version: "3.8"
+
+services:
+  frontend:
+    build: .
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    environment:
+      - NODE_ENV=production
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL}
+      - OLLAMA_MODEL=${OLLAMA_MODEL}
+      - EMBEDDING_MODEL_NAME=${EMBEDDING_MODEL_NAME}
+      - VECTOR_DB_DIRECTORY=${VECTOR_DB_DIRECTORY:-./vector_db}
+      - API_HOST=${API_HOST}
+      - API_PORT=${API_PORT}
+    volumes:
+      - ./vector_db:/app/vector_db
+      - ./backend/config:/app/config
+      # Note: Session data is stored in-memory for privacy
+      # Sessions are isolated per user and expire after 24h
+      # To persist sessions across restarts, implement disk-backed SessionManager
+    depends_on:
+      - ollama
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+
+volumes:
+  ollama_data:

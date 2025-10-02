@@ -1,0 +1,37 @@
+# Backend config (generated at runtime)
+backend/config/
+
+# Python cache
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/*.pyd
+.Python
+
+# Environment files
+.env
+.env.local
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# Testing
+.pytest_cache
+.coverage
+
+# Node modules
+node_modules
+
+# Build outputs
+dist
+build
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
