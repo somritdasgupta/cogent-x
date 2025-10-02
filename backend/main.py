@@ -819,13 +819,13 @@ Answer:"""
             raise HTTPException(
                 status_code=500, detail="Google Generative AI package not installed. Run: pip install google-generativeai")
 
-        api_key = CURRENT_CONFIG.get("gemini_api_key")
+        api_key = active_config.get("gemini_api_key")
         if not api_key:
             raise HTTPException(
                 status_code=400, detail="Gemini API key not configured")
 
         genai.configure(api_key=api_key)
-        model_name = CURRENT_CONFIG.get("gemini_model", "gemini-pro")
+        model_name = active_config.get("gemini_model", "gemini-pro")
         model = genai.GenerativeModel(model_name)
 
         try:
