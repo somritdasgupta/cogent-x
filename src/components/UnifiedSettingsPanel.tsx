@@ -182,7 +182,6 @@ export const UnifiedSettingsPanel = () => {
   // Check system status
   const checkStatus = useCallback(async () => {
     try {
-      setIsRefreshing(true);
       const response = await apiGet(API_ENDPOINTS.HEALTH);
       if (response.ok) {
         const data = await response.json();
@@ -193,18 +192,9 @@ export const UnifiedSettingsPanel = () => {
       }
     } catch (error) {
       console.error("Health check failed:", error);
-      // Only show error toast on manual refresh, not auto-refresh
-      if (isRefreshing) {
-        toast({
-          title: "Connection Error",
-          description: "Unable to reach backend",
-          variant: "destructive",
-        });
-      }
-    } finally {
-      setIsRefreshing(false);
+      // Don't show toast on auto-refresh, only log error
     }
-  }, [toast, isRefreshing]);
+  }, []);
 
   // Fetch knowledge bases
   const fetchKnowledgeBases = useCallback(async () => {
@@ -261,13 +251,8 @@ export const UnifiedSettingsPanel = () => {
     }, 60000);
 
     return () => clearInterval(interval);
-  }, [
-    fetchConfiguration,
-    checkStatus,
-    fetchKnowledgeBases,
-    fetchDatabaseStats,
-    fetchSources,
-  ]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run once on mount
 
   // Save configuration
   const handleSave = async () => {
