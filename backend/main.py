@@ -844,7 +844,7 @@ Answer:"""
 def check_ollama_health(session_config: Optional[Dict] = None) -> bool:
     """Check if any LLM service is available (Ollama, OpenAI, or Gemini)"""
     config = session_config if session_config else CURRENT_CONFIG
-    
+
     # Check if OpenAI API key is configured
     openai_key = config.get("openai_api_key", "").strip()
     if openai_key and len(openai_key) > 10 and "•" not in openai_key:
@@ -908,7 +908,7 @@ async def health_check(x_session_id: Optional[str] = Header(None)):
     session_config = None
     if x_session_id:
         session_config = session_manager.get_session_config(x_session_id)
-    
+
     llm_status = check_ollama_health(session_config)
     db_status = check_vectordb_health()
 

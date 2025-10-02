@@ -12,7 +12,11 @@ interface SystemStatus {
   vectorDB: boolean;
 }
 
-export const SystemStatusPanel = ({ onConfigChange }: { onConfigChange?: number }) => {
+export const SystemStatusPanel = ({
+  onConfigChange,
+}: {
+  onConfigChange?: number;
+}) => {
   const [status, setStatus] = useState<SystemStatus>({
     backend: false,
     llm: false,

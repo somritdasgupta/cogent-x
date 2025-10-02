@@ -27,7 +27,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { getSessionInfo, clearSession, hasSession } from "@/lib/session";
 import { apiGet, apiDelete, API_ENDPOINTS } from "@/config/api";
-import { Trash2, RefreshCw, Clock, Database, FileText } from "lucide-react";
+import { Trash2, RefreshCw, Clock } from "lucide-react";
 
 interface SessionStats {
   total_documents: number;
@@ -127,28 +127,6 @@ export function SessionInfo() {
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
-        {/* Session Stats */}
-        {sessionStats && (
-          <div className="grid grid-cols-2 gap-2 text-xs">
-            <div className="flex items-center gap-2 p-2 rounded-md bg-muted/50">
-              <FileText className="h-3 w-3 text-muted-foreground" />
-              <div>
-                <div className="font-medium">
-                  {sessionStats.total_documents}
-                </div>
-                <div className="text-muted-foreground">Documents</div>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 p-2 rounded-md bg-muted/50">
-              <Database className="h-3 w-3 text-muted-foreground" />
-              <div>
-                <div className="font-medium">{sessionStats.total_chunks}</div>
-                <div className="text-muted-foreground">Chunks</div>
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* Action Buttons */}
         <div className="flex gap-2">
           <Button

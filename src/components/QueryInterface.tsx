@@ -108,22 +108,22 @@ const QueryInterface = () => {
   }, []);
 
   const quickPrompts = [
-    "How do I get started?",
-    "Show me a code example",
-    "What are the installation steps?",
-    "Explain the architecture",
-    "List all API endpoints",
-    "What are the configuration options?",
-    "Show me best practices",
-    "Troubleshooting common errors",
-    "How to deploy to production?",
-    "What are the dependencies?",
-    "Show me the database schema",
-    "How to join multiple tables?",
-    "Write a SQL query for...",
-    "Explain the table relationships",
-    "What are the foreign keys?",
-    "Show me database migrations",
+    "Setup & environment requirements",
+    "Installation & deployment steps",
+    "Configuration reference with examples",
+    "System design & architecture overview",
+    "API endpoints with sample payloads",
+    "Authentication & session management",
+    "Common errors & resolution guide",
+    "Database schema & entity diagrams",
+    "Data models & object definitions",
+    "Version upgrades & migration steps",
+    "Dependencies & supported platforms",
+    "Integration patterns & connectors",
+    "Monitoring, logging & alerting setup",
+    "Performance optimization techniques",
+    "Security & compliance notes",
+    "Release updates & breaking changes",
   ];
 
   const startRecording = async () => {
@@ -276,7 +276,7 @@ const QueryInterface = () => {
       const audioBlob = await response.blob();
       const audioUrl = URL.createObjectURL(audioBlob);
 
-      // Create and play audio
+      // Create & play audio
       const audio = new Audio(audioUrl);
       currentAudioRef.current = audio;
 
@@ -590,122 +590,122 @@ const QueryInterface = () => {
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         {/* Large Floating Gradient Circles */}
         <div
-          className="absolute top-20 left-10 w-80 h-80 bg-blue-400/10 dark:bg-blue-400/20 rounded-full blur-3xl animate-pulse"
+          className="absolute top-20 left-10 w-80 h-80 bg-blue-400/5 dark:bg-blue-400/10 rounded-full blur-3xl animate-pulse"
           style={{ animationDuration: "4s" }}
         />
         <div
-          className="absolute bottom-32 right-16 w-96 h-96 bg-purple-400/10 dark:bg-purple-400/20 rounded-full blur-3xl animate-pulse"
+          className="absolute bottom-32 right-16 w-96 h-96 bg-purple-400/5 dark:bg-purple-400/10 rounded-full blur-3xl animate-pulse"
           style={{ animationDuration: "5s", animationDelay: "1s" }}
         />
         <div
-          className="absolute top-1/3 right-1/4 w-64 h-64 bg-indigo-400/10 dark:bg-indigo-400/20 rounded-full blur-2xl animate-pulse"
+          className="absolute top-1/3 right-1/4 w-64 h-64 bg-indigo-400/5 dark:bg-indigo-400/10 rounded-full blur-2xl animate-pulse"
           style={{ animationDuration: "6s", animationDelay: "2s" }}
         />
         <div
-          className="absolute top-1/2 left-1/3 w-72 h-72 bg-pink-400/8 dark:bg-pink-400/15 rounded-full blur-3xl animate-pulse"
+          className="absolute top-1/2 left-1/3 w-72 h-72 bg-pink-400/4 dark:bg-pink-400/8 rounded-full blur-3xl animate-pulse"
           style={{ animationDuration: "7s", animationDelay: "1.5s" }}
         />
 
         {/* Geometric Shapes - Squares & Rectangles */}
-        <div className="absolute top-40 right-20 w-24 h-24 border-2 border-blue-400/30 dark:border-blue-400/40 rounded-lg rotate-12 animate-float" />
+        <div className="absolute top-40 right-20 w-24 h-24 border-2 border-blue-400/15 dark:border-blue-400/20 rounded-lg rotate-12 animate-float" />
         <div
-          className="absolute top-32 left-1/4 w-16 h-16 border-2 border-purple-400/25 dark:border-purple-400/35 rounded-lg -rotate-45 animate-float"
+          className="absolute top-32 left-1/4 w-16 h-16 border-2 border-purple-400/12 dark:border-purple-400/18 rounded-lg -rotate-45 animate-float"
           style={{ animationDelay: "0.5s" }}
         />
         <div
-          className="absolute bottom-48 left-32 w-20 h-20 border-2 border-indigo-400/25 dark:border-indigo-400/35 rounded-lg rotate-6 animate-float"
+          className="absolute bottom-48 left-32 w-20 h-20 border-2 border-indigo-400/12 dark:border-indigo-400/18 rounded-lg rotate-6 animate-float"
           style={{ animationDelay: "1s" }}
         />
         <div
-          className="absolute bottom-1/3 right-40 w-18 h-18 border-2 border-pink-400/30 dark:border-pink-400/40 rounded-lg -rotate-12 animate-float"
+          className="absolute bottom-1/3 right-40 w-18 h-18 border-2 border-pink-400/15 dark:border-pink-400/20 rounded-lg -rotate-12 animate-float"
           style={{ animationDelay: "3s" }}
         />
         <div
-          className="absolute top-2/3 right-1/3 w-14 h-14 border-2 border-blue-300/25 dark:border-blue-400/35 rounded-lg rotate-45 animate-float"
+          className="absolute top-2/3 right-1/3 w-14 h-14 border-2 border-blue-300/12 dark:border-blue-400/18 rounded-lg rotate-45 animate-float"
           style={{ animationDelay: "2.5s" }}
         />
         <div
-          className="absolute top-1/4 left-1/2 w-20 h-20 border-2 border-purple-300/20 dark:border-purple-400/30 rounded-lg -rotate-30 animate-float"
+          className="absolute top-1/4 left-1/2 w-20 h-20 border-2 border-purple-300/10 dark:border-purple-400/15 rounded-lg -rotate-30 animate-float"
           style={{ animationDelay: "1.8s" }}
         />
 
         {/* Circles */}
         <div
-          className="absolute bottom-48 left-1/4 w-24 h-24 border-2 border-purple-400/30 dark:border-purple-400/40 rounded-full animate-float"
+          className="absolute bottom-48 left-1/4 w-24 h-24 border-2 border-purple-400/15 dark:border-purple-400/20 rounded-full animate-float"
           style={{ animationDelay: "1s" }}
         />
         <div
-          className="absolute top-1/2 left-16 w-16 h-16 border-2 border-indigo-400/30 dark:border-indigo-400/40 rounded-full animate-float"
+          className="absolute top-1/2 left-16 w-16 h-16 border-2 border-indigo-400/15 dark:border-indigo-400/20 rounded-full animate-float"
           style={{ animationDelay: "2s" }}
         />
         <div
-          className="absolute top-1/3 right-32 w-20 h-20 border-2 border-pink-400/25 dark:border-pink-400/35 rounded-full animate-float"
+          className="absolute top-1/3 right-32 w-20 h-20 border-2 border-pink-400/12 dark:border-pink-400/18 rounded-full animate-float"
           style={{ animationDelay: "2.8s" }}
         />
         <div
-          className="absolute bottom-1/4 left-1/3 w-18 h-18 border-2 border-blue-400/25 dark:border-blue-400/35 rounded-full animate-float"
+          className="absolute bottom-1/4 left-1/3 w-18 h-18 border-2 border-blue-400/12 dark:border-blue-400/18 rounded-full animate-float"
           style={{ animationDelay: "3.2s" }}
         />
 
         {/* Triangles (rotated squares) */}
         <div
-          className="absolute top-1/2 right-24 w-16 h-16 border-2 border-indigo-400/30 dark:border-indigo-400/40 rotate-45 animate-float"
+          className="absolute top-1/2 right-24 w-16 h-16 border-2 border-indigo-400/15 dark:border-indigo-400/20 rotate-45 animate-float"
           style={{ animationDelay: "2s" }}
         />
         <div
-          className="absolute bottom-1/2 left-1/4 w-14 h-14 border-2 border-pink-400/25 dark:border-pink-400/35 rotate-45 animate-float"
+          className="absolute bottom-1/2 left-1/4 w-14 h-14 border-2 border-pink-400/12 dark:border-pink-400/18 rotate-45 animate-float"
           style={{ animationDelay: "3.5s" }}
         />
         <div
-          className="absolute top-3/4 right-1/2 w-12 h-12 border-2 border-blue-400/30 dark:border-blue-400/40 rotate-45 animate-float"
+          className="absolute top-3/4 right-1/2 w-12 h-12 border-2 border-blue-400/15 dark:border-blue-400/20 rotate-45 animate-float"
           style={{ animationDelay: "1.2s" }}
         />
 
         {/* Dots Patterns - More Scattered */}
-        <div className="absolute top-60 left-1/4 grid grid-cols-3 gap-3 opacity-30">
+        <div className="absolute top-60 left-1/4 grid grid-cols-3 gap-3 opacity-15">
           <div className="w-2.5 h-2.5 bg-blue-400 rounded-full" />
           <div className="w-2.5 h-2.5 bg-purple-400 rounded-full" />
           <div className="w-2.5 h-2.5 bg-indigo-400 rounded-full" />
         </div>
-        <div className="absolute bottom-40 right-1/3 grid grid-cols-2 gap-2 opacity-30">
+        <div className="absolute bottom-40 right-1/3 grid grid-cols-2 gap-2 opacity-15">
           <div className="w-2 h-2 bg-pink-400 rounded-full" />
           <div className="w-2 h-2 bg-blue-400 rounded-full" />
         </div>
-        <div className="absolute top-1/3 left-1/3 grid grid-cols-4 gap-2 opacity-25">
+        <div className="absolute top-1/3 left-1/3 grid grid-cols-4 gap-2 opacity-12">
           <div className="w-1.5 h-1.5 bg-indigo-400 rounded-full" />
           <div className="w-1.5 h-1.5 bg-purple-400 rounded-full" />
           <div className="w-1.5 h-1.5 bg-blue-400 rounded-full" />
           <div className="w-1.5 h-1.5 bg-pink-400 rounded-full" />
         </div>
-        <div className="absolute bottom-1/3 left-1/2 grid grid-cols-3 gap-2.5 opacity-30">
+        <div className="absolute bottom-1/3 left-1/2 grid grid-cols-3 gap-2.5 opacity-15">
           <div className="w-2 h-2 bg-purple-400 rounded-full" />
           <div className="w-2 h-2 bg-indigo-400 rounded-full" />
           <div className="w-2 h-2 bg-blue-400 rounded-full" />
         </div>
 
         {/* Line Accents - More Throughout */}
-        <div className="absolute top-1/4 right-12 w-32 h-0.5 bg-gradient-to-r from-transparent via-blue-400/40 to-transparent rotate-45" />
-        <div className="absolute bottom-1/4 left-20 w-40 h-0.5 bg-gradient-to-r from-transparent via-purple-400/40 to-transparent -rotate-12" />
-        <div className="absolute top-1/2 left-1/4 w-28 h-0.5 bg-gradient-to-r from-transparent via-indigo-400/35 to-transparent rotate-30" />
-        <div className="absolute bottom-1/3 right-1/4 w-36 h-0.5 bg-gradient-to-r from-transparent via-pink-400/35 to-transparent -rotate-45" />
-        <div className="absolute top-3/4 right-1/3 w-24 h-0.5 bg-gradient-to-r from-transparent via-blue-400/30 to-transparent rotate-60" />
+        <div className="absolute top-1/4 right-12 w-32 h-0.5 bg-gradient-to-r from-transparent via-blue-400/20 to-transparent rotate-45" />
+        <div className="absolute bottom-1/4 left-20 w-40 h-0.5 bg-gradient-to-r from-transparent via-purple-400/20 to-transparent -rotate-12" />
+        <div className="absolute top-1/2 left-1/4 w-28 h-0.5 bg-gradient-to-r from-transparent via-indigo-400/18 to-transparent rotate-30" />
+        <div className="absolute bottom-1/3 right-1/4 w-36 h-0.5 bg-gradient-to-r from-transparent via-pink-400/18 to-transparent -rotate-45" />
+        <div className="absolute top-3/4 right-1/3 w-24 h-0.5 bg-gradient-to-r from-transparent via-blue-400/15 to-transparent rotate-60" />
 
         {/* Plus Signs */}
-        <div className="absolute top-1/4 left-16 opacity-20">
+        <div className="absolute top-1/4 left-16 opacity-10">
           <div className="w-12 h-0.5 bg-blue-400 absolute top-1/2 left-0 transform -translate-y-1/2" />
           <div className="h-12 w-0.5 bg-blue-400 absolute left-1/2 top-0 transform -translate-x-1/2" />
         </div>
-        <div className="absolute bottom-1/3 right-20 opacity-20">
+        <div className="absolute bottom-1/3 right-20 opacity-10">
           <div className="w-10 h-0.5 bg-purple-400 absolute top-1/2 left-0 transform -translate-y-1/2" />
           <div className="h-10 w-0.5 bg-purple-400 absolute left-1/2 top-0 transform -translate-x-1/2" />
         </div>
 
         {/* Star-like elements (X shapes) */}
-        <div className="absolute top-2/3 left-1/3 w-8 h-8 opacity-25">
+        <div className="absolute top-2/3 left-1/3 w-8 h-8 opacity-12">
           <div className="w-full h-0.5 bg-indigo-400 absolute top-1/2 left-0 transform -translate-y-1/2 rotate-45" />
           <div className="w-full h-0.5 bg-indigo-400 absolute top-1/2 left-0 transform -translate-y-1/2 -rotate-45" />
         </div>
-        <div className="absolute top-1/3 right-1/3 w-10 h-10 opacity-25">
+        <div className="absolute top-1/3 right-1/3 w-10 h-10 opacity-12">
           <div className="w-full h-0.5 bg-pink-400 absolute top-1/2 left-0 transform -translate-y-1/2 rotate-45" />
           <div className="w-full h-0.5 bg-pink-400 absolute top-1/2 left-0 transform -translate-y-1/2 -rotate-45" />
         </div>
@@ -899,7 +899,7 @@ const QueryInterface = () => {
                     </div>
                   )}
 
-                  {/* Text-to-Speech and Copy buttons for assistant messages */}
+                  {/* Text-to-Speech & Copy buttons for assistant messages */}
                   {message.role === "assistant" && (
                     <div className="flex items-center gap-2 mt-3.5">
                       <button
@@ -1024,7 +1024,7 @@ const QueryInterface = () => {
         <div className="container mx-auto px-6 sm:px-8 md:px-12 lg:px-16 py-3">
           <form onSubmit={handleQuerySubmission}>
             <div className="max-w-7xl mx-auto flex items-center gap-3">
-              <div className="flex-1 relative">
+              <div className="flex-1 relative neon-border-wrapper">
                 <Input
                   value={currentQuery}
                   onChange={(e) => setCurrentQuery(e.target.value)}
@@ -1036,7 +1036,7 @@ const QueryInterface = () => {
                       : "Ask cogent-x anything about your documents..."
                   }
                   disabled={isProcessing || isRecording || isTranscribing}
-                  className="w-full text-base h-14 rounded-2xl border-3 border-blue-400 dark:border-blue-500 focus-visible:ring-4 focus-visible:ring-blue-500/40 focus-visible:border-blue-600 shadow-[0_2px_16px_rgba(59,130,246,0.2)] hover:shadow-[0_4px_24px_rgba(59,130,246,0.3)] dark:shadow-[0_2px_20px_rgba(59,130,246,0.3)] dark:hover:shadow-[0_4px_28px_rgba(59,130,246,0.4)] transition-all duration-200 bg-white dark:bg-slate-900 placeholder:text-slate-400 font-medium pr-4"
+                  className="w-full text-base h-14 rounded-2xl border-3 border-blue-400 dark:border-blue-500 focus-visible:ring-4 focus-visible:ring-blue-500/40 focus-visible:border-blue-600 shadow-[0_2px_16px_rgba(59,130,246,0.2)] hover:shadow-[0_4px_24px_rgba(59,130,246,0.3)] dark:shadow-[0_2px_20px_rgba(59,130,246,0.3)] dark:hover:shadow-[0_4px_28px_rgba(59,130,246,0.4)] transition-all duration-200 bg-white dark:bg-slate-900 placeholder:text-slate-400 font-medium pr-4 relative z-10"
                 />
               </div>
 

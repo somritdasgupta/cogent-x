@@ -1,6 +1,6 @@
 import QueryInterface from "@/components/QueryInterface";
 import { UnifiedSettingsPanel } from "@/components/UnifiedSettingsPanel";
-import { Github, BookOpen, Code, Sparkles } from "lucide-react";
+import { Github, BookOpen, Code, Activity } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getApiDocsUrl } from "@/config/api";
 
@@ -24,6 +24,20 @@ const Index = () => {
             </div>
 
             <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2 border border-slate-300 dark:border-slate-700 hover:border-green-500 dark:hover:border-green-400 hover:bg-green-50 dark:hover:bg-slate-800 transition-all duration-200"
+                onClick={() =>
+                  window.open(
+                    "https://stats.uptimerobot.com/FxzeOvqyqU",
+                    "_blank"
+                  )
+                }
+              >
+                <Activity className="h-4 w-4" />
+                <span className="hidden sm:inline">Status</span>
+              </Button>
               <Button
                 variant="outline"
                 size="sm"

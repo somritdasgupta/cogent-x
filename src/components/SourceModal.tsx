@@ -17,6 +17,9 @@ import {
 } from "lucide-react";
 import { Button } from "./ui/button";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
 import { API_ENDPOINTS, buildApiUrlWithParams, apiGet } from "@/config/api";
 
 interface SourceChunk {
@@ -35,13 +38,16 @@ export const SourceModal = ({ url, usedChunks, onClose }: SourceModalProps) => {
   const [chunks, setChunks] = useState<SourceChunk[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [showOnlyUsed, setShowOnlyUsed] = useState(false);
 
-  // Filter chunks based on search
-  const filteredChunks = chunks.filter(
-    (chunk) =>
+  // Filter chunks based on search and toggle
+  const filteredChunks = chunks.filter((chunk) => {
+    const matchesSearch =
       searchQuery.trim() === "" ||
-      chunk.content.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+      chunk.content.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesUsedFilter = !showOnlyUsed || usedChunks.includes(chunk.index);
+    return matchesSearch && matchesUsedFilter;
+  });
 
   // Load chunks when dialog opens
   useEffect(() => {
@@ -122,16 +128,38 @@ export const SourceModal = ({ url, usedChunks, onClose }: SourceModalProps) => {
           )}
         </SheetHeader>
 
-        {/* Search Bar */}
-        <div className="mt-4 relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            type="text"
-            placeholder="Search in chunks..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10"
-          />
+        {/* Search Bar and Filters */}
+        <div className="mt-4 space-y-3">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              type="text"
+              placeholder="Search in chunks..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+
+          {usedChunks.length > 0 && (
+            <>
+              <Separator />
+              <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30 border">
+                <Label
+                  htmlFor="show-used-only"
+                  className="text-sm font-medium cursor-pointer flex items-center gap-2"
+                >
+                  <Sparkles className="h-4 w-4 text-primary" />
+                  Show only used chunks
+                </Label>
+                <Switch
+                  id="show-used-only"
+                  checked={showOnlyUsed}
+                  onCheckedChange={setShowOnlyUsed}
+                />
+              </div>
+            </>
+          )}
         </div>
 
         {isLoading ? (
