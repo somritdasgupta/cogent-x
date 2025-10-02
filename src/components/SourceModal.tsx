@@ -1,16 +1,23 @@
 import { useState, useEffect } from "react";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Loader2, AlertCircle, ExternalLink, Sparkles } from "lucide-react";
+import {
+  Loader2,
+  AlertCircle,
+  ExternalLink,
+  Sparkles,
+  Search,
+} from "lucide-react";
 import { Button } from "./ui/button";
-import { API_ENDPOINTS, buildApiUrlWithParams } from "@/config/api";
+import { Input } from "@/components/ui/input";
+import { API_ENDPOINTS, buildApiUrlWithParams, apiGet } from "@/config/api";
 
 interface SourceChunk {
   content: string;
@@ -27,6 +34,14 @@ interface SourceModalProps {
 export const SourceModal = ({ url, usedChunks, onClose }: SourceModalProps) => {
   const [chunks, setChunks] = useState<SourceChunk[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  // Filter chunks based on search
+  const filteredChunks = chunks.filter(
+    (chunk) =>
+      searchQuery.trim() === "" ||
+      chunk.content.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   // Load chunks when dialog opens
   useEffect(() => {
@@ -42,11 +57,10 @@ export const SourceModal = ({ url, usedChunks, onClose }: SourceModalProps) => {
     setChunks([]);
 
     try {
-      const response = await fetch(
-        buildApiUrlWithParams(API_ENDPOINTS.DATABASE_SOURCE_CHUNKS, {
-          url: sourceUrl,
-        })
-      );
+      const endpoint = `${
+        API_ENDPOINTS.DATABASE_SOURCE_CHUNKS
+      }?url=${encodeURIComponent(sourceUrl)}`;
+      const response = await apiGet(endpoint);
 
       if (!response.ok) {
         throw new Error("Failed to load chunks");
@@ -70,85 +84,109 @@ export const SourceModal = ({ url, usedChunks, onClose }: SourceModalProps) => {
   };
 
   return (
-    <Dialog open={url !== null} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[80vh] overflow-hidden flex flex-col">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <span>Source Chunks</span>
-            {url && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => window.open(url, "_blank")}
-                className="h-6 px-2"
-              >
-                <ExternalLink className="h-3 w-3" />
-              </Button>
-            )}
-          </DialogTitle>
-          <DialogDescription className="text-xs break-all">
+    <Sheet open={url !== null} onOpenChange={handleOpenChange}>
+      <SheetContent className="w-full sm:max-w-2xl overflow-y-auto">
+        <SheetHeader>
+          <div className="flex items-center justify-between">
+            <SheetTitle className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-primary" />
+              <span>Source Chunks</span>
+              {url && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => window.open(url, "_blank")}
+                  className="h-7 px-2 hover:bg-muted"
+                >
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </Button>
+              )}
+            </SheetTitle>
+          </div>
+          <SheetDescription className="text-xs break-all pt-1">
             {url}
-          </DialogDescription>
+          </SheetDescription>
           {usedChunks.length > 0 && (
-            <Alert className="mt-2">
-              <Sparkles className="h-4 w-4" />
-              <AlertDescription>
-                <span className="font-semibold">{usedChunks.length}</span> chunk
+            <Alert className="mt-3 border-primary/20 bg-primary/5">
+              <Sparkles className="h-4 w-4 text-primary" />
+              <AlertDescription className="text-sm">
+                <span className="font-semibold text-primary">
+                  {usedChunks.length}
+                </span>{" "}
+                chunk
                 {usedChunks.length !== 1 ? "s were" : " was"} used to generate
                 the answer. Highlighted chunks below show the exact content
                 used.
               </AlertDescription>
             </Alert>
           )}
-        </DialogHeader>
+        </SheetHeader>
+
+        {/* Search Bar */}
+        <div className="mt-4 relative">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            type="text"
+            placeholder="Search in chunks..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-10"
+          />
+        </div>
 
         {isLoading ? (
-          <div className="flex items-center justify-center py-8">
+          <div className="flex items-center justify-center py-12">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
           </div>
         ) : (
-          <div className="flex-1 overflow-y-auto space-y-4 pr-2">
-            {chunks.map((chunk, idx) => {
+          <div className="mt-6 space-y-4">
+            {filteredChunks.map((chunk, idx) => {
               const isUsed = usedChunks.includes(chunk.index);
               return (
                 <div
                   key={idx}
-                  className={`p-4 rounded-lg space-y-2 transition-all duration-200 ${
+                  className={`p-4 rounded-lg space-y-3 transition-all duration-200 ${
                     isUsed
-                      ? "bg-primary/10 border-2 border-primary shadow-md ring-2 ring-primary/20"
-                      : "bg-muted/50 border border-border opacity-60"
+                      ? "bg-primary/10 border-2 border-primary shadow-lg ring-2 ring-primary/20"
+                      : "bg-muted/50 border border-border/50 hover:border-border"
                   }`}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <Badge variant={isUsed ? "default" : "outline"}>
+                      <Badge
+                        variant={isUsed ? "default" : "outline"}
+                        className={isUsed ? "bg-primary shadow-sm" : ""}
+                      >
                         Chunk {idx + 1}
                         {isUsed && " ✓"}
                       </Badge>
                       {isUsed && (
-                        <Badge variant="secondary" className="text-xs">
+                        <Badge
+                          variant="secondary"
+                          className="text-xs bg-primary/20 text-primary border-primary/30"
+                        >
                           Used in answer
                         </Badge>
                       )}
                     </div>
-                    <span className="text-xs text-muted-foreground">
+                    <span className="text-xs text-muted-foreground font-medium">
                       Index: {chunk.index}
                     </span>
                   </div>
-                  <div className="text-sm text-foreground whitespace-pre-wrap">
+                  <div className="text-sm text-foreground/90 whitespace-pre-wrap leading-relaxed">
                     {chunk.content}
                   </div>
                   {chunk.metadata && Object.keys(chunk.metadata).length > 0 && (
-                    <div className="pt-2 border-t border-border/50">
-                      <div className="text-xs text-muted-foreground font-semibold mb-1">
+                    <div className="pt-3 border-t border-border/50">
+                      <div className="text-xs text-muted-foreground font-semibold mb-2">
                         Metadata:
                       </div>
-                      <div className="flex flex-wrap gap-1">
+                      <div className="flex flex-wrap gap-1.5">
                         {Object.entries(chunk.metadata).map(([key, value]) => (
                           <Badge
                             key={key}
                             variant="secondary"
-                            className="text-xs"
+                            className="text-xs font-normal"
                           >
                             {key}: {value}
                           </Badge>
@@ -160,17 +198,19 @@ export const SourceModal = ({ url, usedChunks, onClose }: SourceModalProps) => {
               );
             })}
 
-            {chunks.length === 0 && !isLoading && (
-              <Alert>
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription className="text-xs">
-                  No chunks found for this source.
+            {filteredChunks.length === 0 && !isLoading && (
+              <Alert className="border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-900">
+                <AlertCircle className="h-4 w-4 text-amber-600" />
+                <AlertDescription className="text-sm text-amber-800 dark:text-amber-300">
+                  {searchQuery.trim()
+                    ? "No chunks match your search."
+                    : "No chunks found for this source."}
                 </AlertDescription>
               </Alert>
             )}
           </div>
         )}
-      </DialogContent>
-    </Dialog>
+      </SheetContent>
+    </Sheet>
   );
 };

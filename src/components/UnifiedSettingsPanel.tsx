@@ -46,6 +46,7 @@ import {
   Bot,
   Activity,
   ExternalLink,
+  Sparkles,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -186,24 +187,24 @@ export const UnifiedSettingsPanel = () => {
       if (response.ok) {
         const data = await response.json();
         setStatus(data);
-        toast({
-          title: "Status Refreshed",
-          description: "System status has been updated successfully",
-        });
+        // Silent refresh - no toast notification
       } else {
         throw new Error("Failed to fetch status");
       }
     } catch (error) {
       console.error("Health check failed:", error);
-      toast({
-        title: "Error",
-        description: "Failed to refresh system status",
-        variant: "destructive",
-      });
+      // Only show error toast on manual refresh, not auto-refresh
+      if (isRefreshing) {
+        toast({
+          title: "Connection Error",
+          description: "Unable to reach backend",
+          variant: "destructive",
+        });
+      }
     } finally {
       setIsRefreshing(false);
     }
-  }, [toast]);
+  }, [toast, isRefreshing]);
 
   // Fetch knowledge bases
   const fetchKnowledgeBases = useCallback(async () => {
@@ -254,10 +255,10 @@ export const UnifiedSettingsPanel = () => {
     fetchDatabaseStats();
     fetchSources();
 
-    // Polling for status
+    // Polling for status (every 60 seconds)
     const interval = setInterval(() => {
       checkStatus();
-    }, 30000);
+    }, 60000);
 
     return () => clearInterval(interval);
   }, [
@@ -285,13 +286,9 @@ export const UnifiedSettingsPanel = () => {
 
       setSaveStatus("success");
       toast({
-        title: "Success",
-        description:
-          "Configuration saved successfully. Restart backend for changes to take effect.",
+        title: "Configuration Saved",
+        description: "Restart backend to apply changes",
       });
-
-      // Auto-refresh system status after successful save
-      checkStatus();
     } catch (error) {
       setSaveStatus("error");
       const errorMessage =
@@ -337,8 +334,8 @@ export const UnifiedSettingsPanel = () => {
       const data = await response.json();
 
       toast({
-        title: "Success",
-        description: data.message || "Document ingested successfully",
+        title: "Document Ingested",
+        description: "Ready for queries",
       });
 
       setUrl("");
@@ -374,11 +371,7 @@ export const UnifiedSettingsPanel = () => {
         throw new Error("Failed to clear database");
       }
 
-      toast({
-        title: "Success",
-        description: "Database cleared successfully",
-      });
-
+      // Silent success - UI will update automatically
       fetchKnowledgeBases();
       fetchDatabaseStats();
       fetchSources();
@@ -416,14 +409,7 @@ export const UnifiedSettingsPanel = () => {
         throw new Error(errorData.detail || "Failed to delete source");
       }
 
-      const result = await response.json();
-
-      toast({
-        title: "Success",
-        description: result.message || "Source deleted successfully",
-      });
-
-      // Refresh data
+      // Silent success - UI updates show the change
       fetchSources();
       fetchDatabaseStats();
       fetchKnowledgeBases();
@@ -446,9 +432,10 @@ export const UnifiedSettingsPanel = () => {
     setSourceChunks([]);
 
     try {
-      const response = await fetch(
-        buildApiUrlWithParams(API_ENDPOINTS.DATABASE_SOURCE_CHUNKS, { url })
-      );
+      const endpoint = `${
+        API_ENDPOINTS.DATABASE_SOURCE_CHUNKS
+      }?url=${encodeURIComponent(url)}`;
+      const response = await apiGet(endpoint);
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -489,23 +476,17 @@ export const UnifiedSettingsPanel = () => {
     <>
       <Sheet>
         <SheetTrigger asChild>
-          <Button variant="outline" size="sm" className="gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2 border-slate-600 bg-slate-900 hover:bg-slate-800 hover:text-blue-200 text-slate-300"
+          >
             <Settings className="h-4 w-4" />
             <span className="hidden sm:inline">Settings</span>
             {isSystemReady ? (
-              <Badge
-                variant="outline"
-                className="bg-success/10 text-success border-success/20 h-5 px-1.5"
-              >
-                <CheckCircle className="h-3 w-3" />
-              </Badge>
+              <CheckCircle className="h-3.5 w-3.5 text-green-500" />
             ) : (
-              <Badge
-                variant="outline"
-                className="bg-destructive/10 text-destructive border-destructive/20 h-5 px-1.5"
-              >
-                <AlertCircle className="h-3 w-3" />
-              </Badge>
+              <AlertCircle className="h-3.5 w-3.5 text-red-500" />
             )}
           </Button>
         </SheetTrigger>
@@ -515,9 +496,6 @@ export const UnifiedSettingsPanel = () => {
               <Settings className="h-6 w-6 text-blue-600" />
               System Configuration
             </SheetTitle>
-            <p className="text-sm text-muted-foreground">
-              Manage your RAG system settings, AI providers, and knowledge base
-            </p>
           </SheetHeader>
 
           {isLoading ? (
@@ -526,12 +504,12 @@ export const UnifiedSettingsPanel = () => {
             </div>
           ) : (
             <Tabs defaultValue="system" className="mt-6">
-              <TabsList className="grid w-full grid-cols-4 mb-6 h-auto p-1">
+              <TabsList className="grid w-full grid-cols-3 mb-6 h-auto p-1">
                 <TabsTrigger
                   value="system"
                   className="text-xs sm:text-sm py-2 gap-1.5"
                 >
-                  <Monitor className="h-4 w-4" /> System
+                  <Monitor className="h-4 w-4" /> System Config
                 </TabsTrigger>
                 <TabsTrigger
                   value="rag"
@@ -543,18 +521,133 @@ export const UnifiedSettingsPanel = () => {
                   value="providers"
                   className="text-xs sm:text-sm py-2 gap-1.5"
                 >
-                  <Bot className="h-4 w-4" /> Providers
-                </TabsTrigger>
-                <TabsTrigger
-                  value="database"
-                  className="text-xs sm:text-sm py-2 gap-1.5"
-                >
-                  <Database className="h-4 w-4" /> Database
+                  <Bot className="h-4 w-4" /> LLM Provider
                 </TabsTrigger>
               </TabsList>
 
               {/* System Status & Ingestion Tab */}
               <TabsContent value="system" className="space-y-6">
+                {/* Document Ingestion - Highlighted at Top */}
+                <div className="space-y-4 p-5 rounded-xl bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 dark:from-blue-950/40 dark:via-indigo-950/40 dark:to-purple-950/40 border-2 border-blue-200 dark:border-blue-800 shadow-lg">
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center justify-center h-10 w-10 rounded-full bg-blue-600 text-white shadow-md">
+                      <Upload className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-blue-900 dark:text-blue-100">
+                        Document Ingestion
+                      </h3>
+                      <p className="text-xs text-blue-700 dark:text-blue-300">
+                        Add web documents to your knowledge base
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* AI Provider Selection */}
+                  <div className="space-y-2 p-3 rounded-lg bg-white/50 dark:bg-slate-900/30 border border-blue-300 dark:border-blue-700">
+                    <Label
+                      htmlFor="ai_provider_ingest"
+                      className="text-sm font-semibold text-blue-900 dark:text-blue-100 flex items-center gap-2"
+                    >
+                      <Sparkles className="h-4 w-4" />
+                      Active AI Provider
+                    </Label>
+                    <Select value={aiProvider} onValueChange={setAiProvider}>
+                      <SelectTrigger
+                        id="ai_provider_ingest"
+                        className="h-10 border-blue-300 dark:border-blue-700"
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="opensource">
+                          Open Source (Ollama)
+                        </SelectItem>
+                        <SelectItem value="openai">OpenAI GPT</SelectItem>
+                        <SelectItem value="gemini">Google Gemini</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-[10px] text-blue-700 dark:text-blue-300">
+                      {aiProvider === "openai"
+                        ? "Using OpenAI GPT models for chat and embeddings"
+                        : aiProvider === "gemini"
+                        ? "Using Google Gemini models for chat"
+                        : "Using local Ollama models for chat and Hugging Face for embeddings"}
+                    </p>
+                  </div>
+
+                  <form onSubmit={handleIngestion} className="space-y-3">
+                    <Input
+                      type="url"
+                      value={url}
+                      onChange={(e) => setUrl(e.target.value)}
+                      placeholder="https://docs.example.com/page"
+                      disabled={isProcessing}
+                      className="h-12 text-base border-2 border-blue-300 dark:border-blue-700 focus-visible:ring-2 focus-visible:ring-blue-500"
+                    />
+
+                    <Button
+                      type="submit"
+                      className="w-full h-12 text-base font-semibold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-md"
+                      disabled={isProcessing || !url.trim()}
+                    >
+                      {isProcessing ? (
+                        <>
+                          <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                          Processing & Embedding...
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="mr-2 h-5 w-5" />
+                          Ingest & Process Document
+                        </>
+                      )}
+                    </Button>
+                  </form>
+
+                  <Alert className="bg-blue-100/50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700">
+                    <AlertCircle className="h-4 w-4 text-blue-600" />
+                    <AlertDescription className="text-xs text-blue-800 dark:text-blue-200">
+                      Documents are scraped, chunked (size: {config.chunk_size},
+                      overlap: {config.chunk_overlap}), embedded, and stored for
+                      semantic search.
+                    </AlertDescription>
+                  </Alert>
+
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-100">
+                        Recently Ingested
+                      </h4>
+                      {isLoadingKB && (
+                        <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+                      )}
+                    </div>
+
+                    {!isLoadingKB && knowledgeBases.length === 0 ? (
+                      <p className="text-xs text-blue-700 dark:text-blue-300 py-2">
+                        No documents ingested yet. Add a URL above to get
+                        started.
+                      </p>
+                    ) : (
+                      <div className="flex flex-wrap gap-2">
+                        {knowledgeBases.map((kb, index) => (
+                          <Badge
+                            key={index}
+                            variant="secondary"
+                            className="text-xs bg-white dark:bg-slate-800 border border-blue-200 dark:border-blue-700"
+                          >
+                            <FileText className="h-3 w-3 mr-1" />
+                            {kb}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <Separator className="my-6" />
+
                 {/* System Status */}
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
@@ -595,7 +688,7 @@ export const UnifiedSettingsPanel = () => {
                             if (url) return url;
                             if (import.meta.env.DEV)
                               return "http://localhost:8000 (via proxy)";
-                            return "⚠️ VITE_API_BASE_URL not set";
+                            return "VITE_API_BASE_URL not set";
                           })()}
                         </span>
                       </div>
@@ -701,119 +794,167 @@ export const UnifiedSettingsPanel = () => {
                   </div>
                 </div>
 
-                <Separator />
+                <Separator className="my-6" />
 
-                {/* Session Information */}
-                <SessionInfo />
-
-                <Separator />
-
-                {/* AI Provider Selection */}
-                <div className="space-y-3">
-                  <div>
-                    <Label
-                      htmlFor="ai_provider"
-                      className="text-sm font-semibold"
-                    >
-                      Active AI Provider
-                    </Label>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Choose which LLM service to use for answering queries
-                    </p>
-                  </div>
-                  <Select value={aiProvider} onValueChange={setAiProvider}>
-                    <SelectTrigger id="ai_provider" className="h-11">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="opensource">
-                        Open Source (Ollama)
-                      </SelectItem>
-                      <SelectItem value="openai">OpenAI GPT</SelectItem>
-                      <SelectItem value="gemini">Google Gemini</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground">
-                    {aiProvider === "openai"
-                      ? "Using OpenAI GPT models for chat and embeddings"
-                      : aiProvider === "gemini"
-                      ? "Using Google Gemini models for chat"
-                      : "Using local Ollama models for chat and Hugging Face for embeddings"}
-                  </p>
-                </div>
-
-                <Separator />
-
-                {/* Document Ingestion */}
-                <div className="space-y-3">
-                  <h3 className="text-sm font-semibold">Document Ingestion</h3>
-
-                  <form onSubmit={handleIngestion} className="space-y-2">
-                    <Input
-                      type="url"
-                      value={url}
-                      onChange={(e) => setUrl(e.target.value)}
-                      placeholder="https://docs.example.com/page"
-                      disabled={isProcessing}
-                    />
-
-                    <Button
-                      type="submit"
-                      className="w-full"
-                      disabled={isProcessing || !url.trim()}
-                    >
-                      {isProcessing ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Processing & Embedding...
-                        </>
-                      ) : (
-                        <>
-                          <Upload className="mr-2 h-4 w-4" />
-                          Ingest & Process Document
-                        </>
-                      )}
-                    </Button>
-                  </form>
-
-                  <Alert>
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertDescription className="text-xs">
-                      Documents are scraped, chunked (size: {config.chunk_size},
-                      overlap: {config.chunk_overlap}), embedded, and stored in
-                      ChromaDB for semantic search.
-                    </AlertDescription>
-                  </Alert>
-
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <h4 className="text-xs font-medium text-muted-foreground">
-                        Ingested Sources
-                      </h4>
-                      {isLoadingKB && (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      )}
-                    </div>
-
-                    {!isLoadingKB && knowledgeBases.length === 0 ? (
-                      <p className="text-xs text-muted-foreground py-2">
-                        No documents ingested yet. Add a URL above to get
-                        started.
+                {/* Vector Database & Session Management - Merged Card */}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-base font-semibold flex items-center gap-2">
+                        <Database className="h-4 w-4 text-purple-600" />
+                        Knowledge Base & Session
+                      </h3>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Manage your vector database, documents, and session
                       </p>
-                    ) : (
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        fetchDatabaseStats();
+                        fetchSources();
+                      }}
+                      className="gap-1.5"
+                    >
+                      <RefreshCw className="h-3.5 w-3.5" />
+                      <span className="text-xs">Refresh</span>
+                    </Button>
+                  </div>
+
+                  {/* Stats Grid - 2x2 */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="p-3.5 rounded-lg bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-950/30 dark:to-purple-900/30 border border-purple-200 dark:border-purple-800 space-y-1">
+                      <div className="text-2xl font-bold text-purple-900 dark:text-purple-100">
+                        {dbStats.total_documents}
+                      </div>
+                      <div className="text-xs text-purple-700 dark:text-purple-300 font-medium">
+                        Documents
+                      </div>
+                    </div>
+                    <div className="p-3.5 rounded-lg bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950/30 dark:to-blue-900/30 border border-blue-200 dark:border-blue-800 space-y-1">
+                      <div className="text-2xl font-bold text-blue-900 dark:text-blue-100">
+                        {dbStats.total_chunks}
+                      </div>
+                      <div className="text-xs text-blue-700 dark:text-blue-300 font-medium">
+                        Vector Chunks
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Session Info Card */}
+                  <SessionInfo />
+
+                  {dbStats.collections.length > 0 && (
+                    <div className="space-y-2">
+                      <Label className="text-xs font-medium">Collections</Label>
                       <div className="flex flex-wrap gap-1.5">
-                        {knowledgeBases.map((kb, index) => (
+                        {dbStats.collections.map((collection, idx) => (
                           <Badge
-                            key={index}
-                            variant="secondary"
+                            key={idx}
+                            variant="outline"
                             className="text-xs"
                           >
-                            <FileText className="h-3 w-3 mr-1" />
-                            {kb}
+                            <Database className="h-3 w-3 mr-1" />
+                            {collection}
                           </Badge>
                         ))}
                       </div>
+                    </div>
+                  )}
+
+                  {/* Sources List */}
+                  <div className="space-y-3 mt-4">
+                    <h4 className="text-sm font-semibold">Source Documents</h4>
+
+                    {sources.length === 0 ? (
+                      <Alert>
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertDescription className="text-xs">
+                          No sources have been ingested yet. Use the Document
+                          Ingestion section above to add sources.
+                        </AlertDescription>
+                      </Alert>
+                    ) : (
+                      <div className="space-y-2 max-h-64 overflow-y-auto">
+                        {sources.map((source) => (
+                          <div
+                            key={source.url}
+                            className="flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted/70 transition-colors cursor-pointer group"
+                            onClick={() => handleViewSource(source.url)}
+                          >
+                            <div className="flex-1 min-w-0 mr-3">
+                              <div className="text-sm font-medium truncate group-hover:text-primary transition-colors">
+                                {source.url}
+                              </div>
+                              <div className="text-xs text-muted-foreground mt-0.5">
+                                {source.chunks} chunk
+                                {source.chunks !== 1 ? "s" : ""} • Click to view
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleViewSource(source.url);
+                                }}
+                                className="text-primary hover:text-primary hover:bg-primary/10"
+                              >
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteSource(source.url);
+                                }}
+                                disabled={isDeletingSource === source.url}
+                                className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                              >
+                                {isDeletingSource === source.url ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <Trash2 className="h-4 w-4" />
+                                )}
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     )}
+                  </div>
+
+                  {/* Danger Zone */}
+                  <div className="space-y-3 mt-6 p-4 rounded-lg border-2 border-destructive/20 bg-destructive/5">
+                    <div className="flex items-center gap-2">
+                      <AlertCircle className="h-4 w-4 text-destructive" />
+                      <h4 className="text-sm font-semibold text-destructive">
+                        Danger Zone
+                      </h4>
+                    </div>
+
+                    <Alert
+                      variant="destructive"
+                      className="border-destructive/50"
+                    >
+                      <AlertDescription className="text-xs">
+                        Clearing the database will permanently delete all
+                        ingested documents and embeddings. This action cannot be
+                        undone.
+                      </AlertDescription>
+                    </Alert>
+
+                    <Button
+                      variant="destructive"
+                      className="w-full"
+                      onClick={handleClearDatabase}
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Clear All Database Data
+                    </Button>
                   </div>
                 </div>
               </TabsContent>
@@ -958,28 +1099,33 @@ export const UnifiedSettingsPanel = () => {
               {/* ALL AI PROVIDER CONFIGURATIONS IN ONE PLACE */}
               <TabsContent value="providers" className="space-y-6">
                 {/* Ollama Section */}
-                <div className="space-y-4 p-4 border rounded-lg">
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-base font-semibold">
-                      Ollama (Open Source Local)
-                    </h3>
-                    <Badge
-                      variant="outline"
-                      className="text-xs bg-green-500/10 text-green-700 dark:text-green-400"
-                    >
-                      Free
-                    </Badge>
+                <div className="space-y-4 p-5 rounded-xl bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-950/30 dark:to-emerald-950/30 border-2 border-green-200 dark:border-green-800 shadow-md">
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center justify-center h-10 w-10 rounded-full bg-green-600 text-white shadow-md">
+                      <Bot className="h-5 w-5" />
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="text-lg font-bold text-green-900 dark:text-green-100">
+                        Ollama (Open Source Local)
+                      </h3>
+                      <Badge
+                        variant="outline"
+                        className="text-xs bg-white dark:bg-slate-900 border-green-300 dark:border-green-700 text-green-700 dark:text-green-400 mt-1"
+                      >
+                        Free • Runs Locally
+                      </Badge>
+                    </div>
                   </div>
 
-                  <Alert>
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertDescription className="text-xs">
+                  <Alert className="bg-white/60 dark:bg-slate-900/40 border-green-300 dark:border-green-700">
+                    <AlertCircle className="h-4 w-4 text-green-600" />
+                    <AlertDescription className="text-xs text-green-800 dark:text-green-200">
                       Ollama runs locally on your machine. Install from{" "}
                       <a
                         href="https://ollama.ai"
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-primary hover:underline font-medium"
+                        className="font-semibold underline hover:text-green-600"
                       >
                         ollama.ai
                       </a>
@@ -1032,18 +1178,25 @@ export const UnifiedSettingsPanel = () => {
                   </div>
                 </div>
 
-                <Separator />
+                <Separator className="my-6" />
 
                 {/* OpenAI Section */}
-                <div className="space-y-4 p-4 border rounded-lg">
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-base font-semibold">OpenAI GPT</h3>
-                    <Badge
-                      variant="outline"
-                      className="text-xs bg-blue-500/10 text-blue-700 dark:text-blue-400"
-                    >
-                      Paid API
-                    </Badge>
+                <div className="space-y-4 p-5 rounded-xl bg-gradient-to-br from-blue-50 to-cyan-50 dark:from-blue-950/30 dark:to-cyan-950/30 border-2 border-blue-200 dark:border-blue-800 shadow-md">
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center justify-center h-10 w-10 rounded-full bg-blue-600 text-white shadow-md">
+                      <Sparkles className="h-5 w-5" />
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="text-lg font-bold text-blue-900 dark:text-blue-100">
+                        OpenAI GPT
+                      </h3>
+                      <Badge
+                        variant="outline"
+                        className="text-xs bg-white dark:bg-slate-900 border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-400 mt-1"
+                      >
+                        Paid API
+                      </Badge>
+                    </div>
                   </div>
 
                   <div className="space-y-2">
@@ -1124,18 +1277,25 @@ export const UnifiedSettingsPanel = () => {
                   </div>
                 </div>
 
-                <Separator />
+                <Separator className="my-6" />
 
                 {/* Gemini Section */}
-                <div className="space-y-4 p-4 border rounded-lg">
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-base font-semibold">Google Gemini</h3>
-                    <Badge
-                      variant="outline"
-                      className="text-xs bg-purple-500/10 text-purple-700 dark:text-purple-400"
-                    >
-                      Paid API
-                    </Badge>
+                <div className="space-y-4 p-5 rounded-xl bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-950/30 dark:to-pink-950/30 border-2 border-purple-200 dark:border-purple-800 shadow-md">
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center justify-center h-10 w-10 rounded-full bg-purple-600 text-white shadow-md">
+                      <Sparkles className="h-5 w-5" />
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="text-lg font-bold text-purple-900 dark:text-purple-100">
+                        Google Gemini
+                      </h3>
+                      <Badge
+                        variant="outline"
+                        className="text-xs bg-white dark:bg-slate-900 border-purple-300 dark:border-purple-700 text-purple-700 dark:text-purple-400 mt-1"
+                      >
+                        Paid API
+                      </Badge>
+                    </div>
                   </div>
 
                   <div className="space-y-2">
@@ -1203,27 +1363,17 @@ export const UnifiedSettingsPanel = () => {
                     <Label htmlFor="gemini_embedding_model">
                       Embedding Model
                     </Label>
-                    <Select
+                    <Input
+                      id="gemini_embedding_model"
+                      placeholder="e.g., models/text-embedding-004, models/embedding-001"
                       value={config.gemini_embedding_model}
-                      onValueChange={(value) =>
-                        updateConfig("gemini_embedding_model", value)
+                      onChange={(e) =>
+                        updateConfig("gemini_embedding_model", e.target.value)
                       }
-                    >
-                      <SelectTrigger id="gemini_embedding_model">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="models/text-embedding-004">
-                          text-embedding-004 (Recommended)
-                        </SelectItem>
-                        <SelectItem value="models/embedding-001">
-                          embedding-001 (Legacy)
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
+                    />
                     <p className="text-xs text-muted-foreground">
-                      text-embedding-004 is the newer model with better
-                      performance and task-type support
+                      Enter any Gemini embedding model name (e.g.,
+                      text-embedding-004, embedding-001)
                     </p>
                   </div>
                 </div>
@@ -1258,149 +1408,6 @@ export const UnifiedSettingsPanel = () => {
                     instead.
                   </AlertDescription>
                 </Alert>
-              </TabsContent>
-
-              {/* Database Management */}
-              <TabsContent value="database" className="space-y-6">
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-semibold">Vector Database</h3>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        fetchDatabaseStats();
-                        fetchSources();
-                      }}
-                    >
-                      <RefreshCw className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="p-3 rounded-lg bg-muted/50 space-y-1">
-                      <div className="text-2xl font-bold">
-                        {dbStats.total_documents}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        Documents
-                      </div>
-                    </div>
-                    <div className="p-3 rounded-lg bg-muted/50 space-y-1">
-                      <div className="text-2xl font-bold">
-                        {dbStats.total_chunks}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        Chunks
-                      </div>
-                    </div>
-                  </div>
-
-                  {dbStats.collections.length > 0 && (
-                    <div className="space-y-2">
-                      <Label className="text-xs">Collections</Label>
-                      <div className="flex flex-wrap gap-1.5">
-                        {dbStats.collections.map((collection, idx) => (
-                          <Badge key={idx} variant="outline">
-                            <Database className="h-3 w-3 mr-1" />
-                            {collection}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <Separator />
-
-                {/* Sources List */}
-                <div className="space-y-3">
-                  <h3 className="text-sm font-semibold">Ingested Sources</h3>
-
-                  {sources.length === 0 ? (
-                    <Alert>
-                      <AlertCircle className="h-4 w-4" />
-                      <AlertDescription className="text-xs">
-                        No sources have been ingested yet. Use the Document
-                        Ingestion panel to add sources.
-                      </AlertDescription>
-                    </Alert>
-                  ) : (
-                    <div className="space-y-2">
-                      {sources.map((source) => (
-                        <div
-                          key={source.url}
-                          className="flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted/70 transition-colors cursor-pointer"
-                          onClick={() => handleViewSource(source.url)}
-                        >
-                          <div className="flex-1 min-w-0 mr-3">
-                            <div className="text-sm font-medium truncate">
-                              {source.url}
-                            </div>
-                            <div className="text-xs text-muted-foreground mt-0.5">
-                              {source.chunks} chunk
-                              {source.chunks !== 1 ? "s" : ""} • Click to view
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleViewSource(source.url);
-                              }}
-                              className="text-primary hover:text-primary hover:bg-primary/10"
-                            >
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDeleteSource(source.url);
-                              }}
-                              disabled={isDeletingSource === source.url}
-                              className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                            >
-                              {isDeletingSource === source.url ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                              ) : (
-                                <Trash2 className="h-4 w-4" />
-                              )}
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                <Separator />
-
-                <div className="space-y-3">
-                  <h3 className="text-sm font-semibold text-destructive">
-                    Danger Zone
-                  </h3>
-
-                  <Alert>
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertDescription className="text-xs">
-                      Clearing the database will permanently delete all ingested
-                      documents and embeddings. This action cannot be undone.
-                    </AlertDescription>
-                  </Alert>
-
-                  <Button
-                    variant="destructive"
-                    className="w-full"
-                    onClick={handleClearDatabase}
-                  >
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    Clear All Data
-                  </Button>
-                </div>
               </TabsContent>
             </Tabs>
           )}

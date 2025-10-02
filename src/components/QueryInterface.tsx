@@ -90,6 +90,23 @@ const QueryInterface = () => {
     };
   }, []);
 
+  // Cleanup audio on unmount
+  useEffect(() => {
+    return () => {
+      if (currentAudioRef.current) {
+        try {
+          currentAudioRef.current.pause();
+          currentAudioRef.current.currentTime = 0;
+          currentAudioRef.current.removeAttribute("src");
+          currentAudioRef.current.load();
+          currentAudioRef.current = null;
+        } catch (e) {
+          console.log("Error cleaning up audio:", e);
+        }
+      }
+    };
+  }, []);
+
   const quickPrompts = [
     "How do I get started?",
     "Show me a code example",
@@ -135,11 +152,7 @@ const QueryInterface = () => {
 
       mediaRecorder.start();
       setIsRecording(true);
-
-      toast({
-        title: "Recording started",
-        description: "Speak your question now",
-      });
+      // Visual indicator shows recording state
     } catch (error) {
       console.error("Microphone error:", error);
       toast({
@@ -159,12 +172,6 @@ const QueryInterface = () => {
 
   const transcribeAudio = async (audioBlob: Blob) => {
     setIsTranscribing(true);
-
-    // Show processing toast
-    toast({
-      title: "Transcribing...",
-      description: "Converting your speech to text",
-    });
 
     try {
       const formData = new FormData();
@@ -218,9 +225,15 @@ const QueryInterface = () => {
       // If clicking the same message that's playing, stop it
       if (playingMessageId === messageId) {
         if (currentAudioRef.current) {
-          currentAudioRef.current.pause();
-          currentAudioRef.current.currentTime = 0;
-          currentAudioRef.current.src = "";
+          // Force stop the audio
+          try {
+            currentAudioRef.current.pause();
+            currentAudioRef.current.currentTime = 0;
+            currentAudioRef.current.removeAttribute("src");
+            currentAudioRef.current.load(); // Reset the audio element
+          } catch (e) {
+            console.log("Error stopping audio:", e);
+          }
           currentAudioRef.current = null;
         }
         setPlayingMessageId(null);
@@ -233,9 +246,14 @@ const QueryInterface = () => {
 
       // Stop any other currently playing audio
       if (currentAudioRef.current) {
-        currentAudioRef.current.pause();
-        currentAudioRef.current.currentTime = 0;
-        currentAudioRef.current.src = "";
+        try {
+          currentAudioRef.current.pause();
+          currentAudioRef.current.currentTime = 0;
+          currentAudioRef.current.removeAttribute("src");
+          currentAudioRef.current.load();
+        } catch (e) {
+          console.log("Error stopping previous audio:", e);
+        }
         currentAudioRef.current = null;
       }
 
@@ -280,11 +298,7 @@ const QueryInterface = () => {
       };
 
       await audio.play();
-
-      toast({
-        title: "🔊 Playing answer",
-        description: "Text-to-speech enabled",
-      });
+      // Audio playing - no toast needed
     } catch (error) {
       console.error("TTS error:", error);
       setPlayingMessageId(null);
@@ -321,8 +335,7 @@ const QueryInterface = () => {
       setCopiedMessageId(messageId);
 
       toast({
-        title: "✅ Copied!",
-        description: "Answer copied to clipboard",
+        title: "✓ Copied",
       });
 
       // Reset copied state after 2 seconds
@@ -527,44 +540,178 @@ const QueryInterface = () => {
   };
 
   return (
-    <div className="flex flex-col h-full bg-gradient-to-br from-slate-50 via-white to-blue-50/30 dark:from-slate-950 dark:via-slate-900 dark:to-blue-950/20">
-      {messages.length === 0 ? (
-        <div className="flex items-center justify-center h-full text-center px-4 pt-20 sm:pt-20">
-          <div className="max-w-2xl space-y-6 animate-in fade-in duration-500">
-            <h2 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent dark:from-blue-400 dark:via-purple-400 dark:to-pink-400">
-              Hi, let's get started.
-            </h2>
-            <p className="text-sm sm:text-base text-muted-foreground leading-relaxed">
-              Ask cogent-x anything about your ingested documents. It will
-              provide detailed answers with source citations.
-            </p>
+    <div className="flex flex-col h-full bg-gradient-to-br from-slate-50 via-white to-blue-50/30 dark:from-slate-950 dark:via-slate-900 dark:to-blue-950/20 relative overflow-hidden">
+      {/* Decorative Background Elements */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden">
+        {/* Large Floating Gradient Circles */}
+        <div
+          className="absolute top-20 left-10 w-80 h-80 bg-blue-400/10 dark:bg-blue-400/20 rounded-full blur-3xl animate-pulse"
+          style={{ animationDuration: "4s" }}
+        />
+        <div
+          className="absolute bottom-32 right-16 w-96 h-96 bg-purple-400/10 dark:bg-purple-400/20 rounded-full blur-3xl animate-pulse"
+          style={{ animationDuration: "5s", animationDelay: "1s" }}
+        />
+        <div
+          className="absolute top-1/3 right-1/4 w-64 h-64 bg-indigo-400/10 dark:bg-indigo-400/20 rounded-full blur-2xl animate-pulse"
+          style={{ animationDuration: "6s", animationDelay: "2s" }}
+        />
+        <div
+          className="absolute top-1/2 left-1/3 w-72 h-72 bg-pink-400/8 dark:bg-pink-400/15 rounded-full blur-3xl animate-pulse"
+          style={{ animationDuration: "7s", animationDelay: "1.5s" }}
+        />
 
+        {/* Geometric Shapes - Squares & Rectangles */}
+        <div className="absolute top-40 right-20 w-24 h-24 border-2 border-blue-400/30 dark:border-blue-400/40 rounded-lg rotate-12 animate-float" />
+        <div
+          className="absolute top-32 left-1/4 w-16 h-16 border-2 border-purple-400/25 dark:border-purple-400/35 rounded-lg -rotate-45 animate-float"
+          style={{ animationDelay: "0.5s" }}
+        />
+        <div
+          className="absolute bottom-48 left-32 w-20 h-20 border-2 border-indigo-400/25 dark:border-indigo-400/35 rounded-lg rotate-6 animate-float"
+          style={{ animationDelay: "1s" }}
+        />
+        <div
+          className="absolute bottom-1/3 right-40 w-18 h-18 border-2 border-pink-400/30 dark:border-pink-400/40 rounded-lg -rotate-12 animate-float"
+          style={{ animationDelay: "3s" }}
+        />
+        <div
+          className="absolute top-2/3 right-1/3 w-14 h-14 border-2 border-blue-300/25 dark:border-blue-400/35 rounded-lg rotate-45 animate-float"
+          style={{ animationDelay: "2.5s" }}
+        />
+        <div
+          className="absolute top-1/4 left-1/2 w-20 h-20 border-2 border-purple-300/20 dark:border-purple-400/30 rounded-lg -rotate-30 animate-float"
+          style={{ animationDelay: "1.8s" }}
+        />
+
+        {/* Circles */}
+        <div
+          className="absolute bottom-48 left-1/4 w-24 h-24 border-2 border-purple-400/30 dark:border-purple-400/40 rounded-full animate-float"
+          style={{ animationDelay: "1s" }}
+        />
+        <div
+          className="absolute top-1/2 left-16 w-16 h-16 border-2 border-indigo-400/30 dark:border-indigo-400/40 rounded-full animate-float"
+          style={{ animationDelay: "2s" }}
+        />
+        <div
+          className="absolute top-1/3 right-32 w-20 h-20 border-2 border-pink-400/25 dark:border-pink-400/35 rounded-full animate-float"
+          style={{ animationDelay: "2.8s" }}
+        />
+        <div
+          className="absolute bottom-1/4 left-1/3 w-18 h-18 border-2 border-blue-400/25 dark:border-blue-400/35 rounded-full animate-float"
+          style={{ animationDelay: "3.2s" }}
+        />
+
+        {/* Triangles (rotated squares) */}
+        <div
+          className="absolute top-1/2 right-24 w-16 h-16 border-2 border-indigo-400/30 dark:border-indigo-400/40 rotate-45 animate-float"
+          style={{ animationDelay: "2s" }}
+        />
+        <div
+          className="absolute bottom-1/2 left-1/4 w-14 h-14 border-2 border-pink-400/25 dark:border-pink-400/35 rotate-45 animate-float"
+          style={{ animationDelay: "3.5s" }}
+        />
+        <div
+          className="absolute top-3/4 right-1/2 w-12 h-12 border-2 border-blue-400/30 dark:border-blue-400/40 rotate-45 animate-float"
+          style={{ animationDelay: "1.2s" }}
+        />
+
+        {/* Dots Patterns - More Scattered */}
+        <div className="absolute top-60 left-1/4 grid grid-cols-3 gap-3 opacity-30">
+          <div className="w-2.5 h-2.5 bg-blue-400 rounded-full" />
+          <div className="w-2.5 h-2.5 bg-purple-400 rounded-full" />
+          <div className="w-2.5 h-2.5 bg-indigo-400 rounded-full" />
+        </div>
+        <div className="absolute bottom-40 right-1/3 grid grid-cols-2 gap-2 opacity-30">
+          <div className="w-2 h-2 bg-pink-400 rounded-full" />
+          <div className="w-2 h-2 bg-blue-400 rounded-full" />
+        </div>
+        <div className="absolute top-1/3 left-1/3 grid grid-cols-4 gap-2 opacity-25">
+          <div className="w-1.5 h-1.5 bg-indigo-400 rounded-full" />
+          <div className="w-1.5 h-1.5 bg-purple-400 rounded-full" />
+          <div className="w-1.5 h-1.5 bg-blue-400 rounded-full" />
+          <div className="w-1.5 h-1.5 bg-pink-400 rounded-full" />
+        </div>
+        <div className="absolute bottom-1/3 left-1/2 grid grid-cols-3 gap-2.5 opacity-30">
+          <div className="w-2 h-2 bg-purple-400 rounded-full" />
+          <div className="w-2 h-2 bg-indigo-400 rounded-full" />
+          <div className="w-2 h-2 bg-blue-400 rounded-full" />
+        </div>
+
+        {/* Line Accents - More Throughout */}
+        <div className="absolute top-1/4 right-12 w-32 h-0.5 bg-gradient-to-r from-transparent via-blue-400/40 to-transparent rotate-45" />
+        <div className="absolute bottom-1/4 left-20 w-40 h-0.5 bg-gradient-to-r from-transparent via-purple-400/40 to-transparent -rotate-12" />
+        <div className="absolute top-1/2 left-1/4 w-28 h-0.5 bg-gradient-to-r from-transparent via-indigo-400/35 to-transparent rotate-30" />
+        <div className="absolute bottom-1/3 right-1/4 w-36 h-0.5 bg-gradient-to-r from-transparent via-pink-400/35 to-transparent -rotate-45" />
+        <div className="absolute top-3/4 right-1/3 w-24 h-0.5 bg-gradient-to-r from-transparent via-blue-400/30 to-transparent rotate-60" />
+
+        {/* Plus Signs */}
+        <div className="absolute top-1/4 left-16 opacity-20">
+          <div className="w-12 h-0.5 bg-blue-400 absolute top-1/2 left-0 transform -translate-y-1/2" />
+          <div className="h-12 w-0.5 bg-blue-400 absolute left-1/2 top-0 transform -translate-x-1/2" />
+        </div>
+        <div className="absolute bottom-1/3 right-20 opacity-20">
+          <div className="w-10 h-0.5 bg-purple-400 absolute top-1/2 left-0 transform -translate-y-1/2" />
+          <div className="h-10 w-0.5 bg-purple-400 absolute left-1/2 top-0 transform -translate-x-1/2" />
+        </div>
+
+        {/* Star-like elements (X shapes) */}
+        <div className="absolute top-2/3 left-1/3 w-8 h-8 opacity-25">
+          <div className="w-full h-0.5 bg-indigo-400 absolute top-1/2 left-0 transform -translate-y-1/2 rotate-45" />
+          <div className="w-full h-0.5 bg-indigo-400 absolute top-1/2 left-0 transform -translate-y-1/2 -rotate-45" />
+        </div>
+        <div className="absolute top-1/3 right-1/3 w-10 h-10 opacity-25">
+          <div className="w-full h-0.5 bg-pink-400 absolute top-1/2 left-0 transform -translate-y-1/2 rotate-45" />
+          <div className="w-full h-0.5 bg-pink-400 absolute top-1/2 left-0 transform -translate-y-1/2 -rotate-45" />
+        </div>
+      </div>
+      {messages.length === 0 ? (
+        <div className="flex items-center justify-center h-full text-center px-4 py-6 md:pt-16 lg:pt-20 overflow-y-auto">
+          <div className="max-w-5xl w-full space-y-6 animate-in fade-in duration-500">
+            {/* Header Section */}
+            <div className="space-y-3">
+              <h2 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent dark:from-blue-400 dark:via-purple-400 dark:to-pink-400">
+                Hi, let's get started.
+              </h2>
+              <p className="text-sm sm:text-base text-muted-foreground leading-relaxed max-w-2xl mx-auto">
+                Ask cogent-x anything about your ingested documents. I'll
+                provide detailed answers with source citations.
+              </p>
+            </div>
+
+            {/* Features Badges */}
             <div className="flex flex-wrap gap-2 justify-center">
               <Badge
                 variant="secondary"
-                className="text-xs px-3 py-1.5 bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/20"
+                className="text-xs sm:text-sm px-3 py-1.5 bg-gradient-to-r from-blue-500/10 to-blue-600/10 text-blue-700 dark:text-blue-300 border border-blue-500/30 shadow-sm"
               >
-                <Sparkles className="h-3 w-3 mr-1" /> Semantic Search
+                <Sparkles className="h-3 w-3 sm:h-4 sm:w-4 mr-1.5" /> Semantic
+                Search
               </Badge>
               <Badge
                 variant="secondary"
-                className="text-xs px-3 py-1.5 bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/20"
+                className="text-xs sm:text-sm px-3 py-1.5 bg-gradient-to-r from-purple-500/10 to-purple-600/10 text-purple-700 dark:text-purple-300 border border-purple-500/30 shadow-sm"
               >
-                <Lightbulb className="h-3 w-3 mr-1" /> RAG-Powered
+                <Lightbulb className="h-3 w-3 sm:h-4 sm:w-4 mr-1.5" />{" "}
+                RAG-Powered
               </Badge>
               <Badge
                 variant="secondary"
-                className="text-xs px-3 py-1.5 bg-pink-500/10 text-pink-700 dark:text-pink-300 border-pink-500/20"
+                className="text-xs sm:text-sm px-3 py-1.5 bg-gradient-to-r from-pink-500/10 to-pink-600/10 text-pink-700 dark:text-pink-300 border border-pink-500/30 shadow-sm"
               >
-                <BookOpen className="h-3 w-3 mr-1" /> Source Citations
+                <BookOpen className="h-3 w-3 sm:h-4 sm:w-4 mr-1.5" /> Source
+                Citations
               </Badge>
             </div>
 
-            <div className="pt-4">
-              <p className="text-xs sm:text-sm text-muted-foreground mb-3 font-medium px-2 sm:px-0">
-                💡 Try these quick prompts:
-              </p>
-              <div className="flex flex-wrap gap-1.5 sm:gap-2 justify-center">
+            {/* Quick Prompts Section */}
+            <div className="space-y-3 pb-4">
+              <div className="flex items-center justify-center gap-2 text-xs sm:text-sm font-semibold text-muted-foreground">
+                <span className="text-lg sm:text-xl">💡</span>
+                <span>Quick Start Prompts</span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 max-w-6xl mx-auto">
                 {quickPrompts.map((prompt, index) => (
                   <button
                     key={index}
@@ -572,21 +719,24 @@ const QueryInterface = () => {
                       setCurrentQuery(prompt);
                       handleQuerySubmission(e, prompt);
                     }}
-                    className="px-3 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm rounded-lg sm:rounded-xl bg-gradient-to-r from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-700 hover:from-blue-100 hover:to-purple-100 dark:hover:from-blue-900/30 dark:hover:to-purple-900/30 border border-slate-300 dark:border-slate-600 hover:border-blue-400 dark:hover:border-blue-600 transition-all duration-200 hover:scale-105 active:scale-95 shadow-sm hover:shadow-md font-medium text-slate-700 dark:text-slate-300 whitespace-nowrap"
+                    className="group relative p-3 text-left rounded-lg bg-white dark:bg-slate-800/50 border-2 border-slate-200 dark:border-slate-700 hover:border-blue-400 dark:hover:border-blue-500 hover:shadow-lg hover:shadow-blue-500/20 transition-all duration-200 hover:-translate-y-0.5"
                   >
-                    {prompt}
+                    <p className="text-xs sm:text-sm font-medium text-slate-800 dark:text-slate-200 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors leading-snug">
+                      {prompt}
+                    </p>
                   </button>
                 ))}
               </div>
-              <p className="text-[10px] sm:text-xs text-muted-foreground/60 mt-3 text-center px-2 sm:px-0">
-                👆 Tap any prompt to instantly ask a question
+
+              <p className="text-[10px] sm:text-xs text-muted-foreground/70 mt-2">
+                👆 Click any prompt to start exploring your knowledge base
               </p>
             </div>
           </div>
         </div>
       ) : (
         <ScrollArea className="flex-1 px-3 sm:px-4 md:px-6 lg:px-8 pb-40">
-          <div className="max-w-6xl mx-auto space-y-4 py-6">
+          <div className="max-w-7xl mx-auto space-y-4 py-6">
             {messages.map((message, index) => (
               <div
                 key={message.id}
@@ -595,12 +745,12 @@ const QueryInterface = () => {
                 } animate-in slide-in-from-bottom-2 duration-300`}
                 style={{ animationDelay: `${index * 50}ms` }}
               >
-                <div className="max-w-[85%] sm:max-w-[80%] lg:max-w-[75%]">
+                <div className="max-w-[85%] sm:max-w-[75%] lg:max-w-[70%]">
                   <div
-                    className={`rounded-2xl px-4 sm:px-5 py-3 sm:py-4 shadow-lg ${
+                    className={`rounded-2xl px-5 sm:px-6 py-4 sm:py-4 ${
                       message.role === "user"
-                        ? "bg-gradient-to-br from-blue-600 via-blue-600 to-blue-700 text-white dark:from-blue-500 dark:via-blue-500 dark:to-blue-600 ring-1 ring-blue-500/20"
-                        : "bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-800/50 dark:to-slate-900/50 border-2 border-slate-200 dark:border-slate-700 backdrop-blur-sm"
+                        ? "bg-gradient-to-br from-blue-600 via-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/30 ring-1 ring-white/20"
+                        : "bg-gradient-to-br from-white to-slate-50/80 dark:from-slate-800 dark:to-slate-800/90 border-2 border-blue-400/60 dark:border-blue-500/60 shadow-[0_0_20px_rgba(59,130,246,0.3)] dark:shadow-[0_0_25px_rgba(59,130,246,0.4)]"
                     }`}
                   >
                     {message.role === "assistant" ? (
@@ -609,37 +759,37 @@ const QueryInterface = () => {
                           remarkPlugins={[remarkGfm]}
                           components={{
                             p: ({ children }) => (
-                              <p className="mb-3 last:mb-0 text-sm sm:text-base leading-relaxed text-foreground">
+                              <p className="mb-3 last:mb-0 text-[15px] sm:text-base leading-[1.7] text-slate-800 dark:text-slate-200 font-normal">
                                 {children}
                               </p>
                             ),
                             ul: ({ children }) => (
-                              <ul className="mb-3 ml-5 space-y-1.5 text-sm sm:text-base">
+                              <ul className="mb-3 ml-5 space-y-2 text-[15px] sm:text-base">
                                 {children}
                               </ul>
                             ),
                             ol: ({ children }) => (
-                              <ol className="mb-3 ml-5 space-y-1.5 text-sm sm:text-base">
+                              <ol className="mb-3 ml-5 space-y-2 text-[15px] sm:text-base">
                                 {children}
                               </ol>
                             ),
                             li: ({ children }) => (
-                              <li className="text-sm sm:text-base text-foreground/90">
+                              <li className="text-[15px] sm:text-base text-slate-700 dark:text-slate-300 leading-[1.6]">
                                 {children}
                               </li>
                             ),
                             h1: ({ children }) => (
-                              <h1 className="text-xl sm:text-2xl font-bold mb-3 text-foreground">
+                              <h1 className="text-xl sm:text-2xl font-bold mb-3 text-slate-900 dark:text-slate-100">
                                 {children}
                               </h1>
                             ),
                             h2: ({ children }) => (
-                              <h2 className="text-lg sm:text-xl font-semibold mb-2.5 text-foreground">
+                              <h2 className="text-lg sm:text-xl font-semibold mb-2.5 text-slate-900 dark:text-slate-100">
                                 {children}
                               </h2>
                             ),
                             h3: ({ children }) => (
-                              <h3 className="text-base sm:text-lg font-semibold mb-2 text-foreground">
+                              <h3 className="text-base sm:text-lg font-semibold mb-2 text-slate-800 dark:text-slate-200">
                                 {children}
                               </h3>
                             ),
@@ -674,14 +824,14 @@ const QueryInterface = () => {
                         </ReactMarkdown>
                       </div>
                     ) : (
-                      <p className="text-sm sm:text-base whitespace-pre-wrap break-words leading-relaxed font-semibold">
+                      <p className="text-[15px] sm:text-base whitespace-pre-wrap break-words leading-[1.6] font-medium">
                         {message.content}
                       </p>
                     )}
                   </div>
 
                   {message.sources && message.sources.length > 0 && (
-                    <div className="flex flex-wrap gap-2 mt-3 px-1">
+                    <div className="flex flex-wrap gap-2 mt-3.5">
                       {message.sources.map((source, index) => (
                         <button
                           key={index}
@@ -693,12 +843,11 @@ const QueryInterface = () => {
                               ),
                             })
                           }
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gradient-to-r from-blue-500/10 to-purple-500/10 hover:from-blue-500/20 hover:to-purple-500/20 text-blue-700 dark:text-blue-300 transition-all duration-200 hover:scale-105 border border-blue-500/30 shadow-sm hover:shadow-md cursor-pointer"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-br from-blue-50 to-blue-100/80 dark:from-blue-950/40 dark:to-blue-900/30 hover:from-blue-100 hover:to-blue-200/80 dark:hover:from-blue-900/50 dark:hover:to-blue-800/40 text-blue-700 dark:text-blue-300 transition-all duration-200 border border-blue-200/60 dark:border-blue-800/50 shadow-sm hover:shadow-md text-xs font-medium"
                         >
                           <ExternalLink className="h-3 w-3" />
-                          <span className="text-xs font-medium">
-                            Source {index + 1} ({source.used_chunks.length}{" "}
-                            chunk{source.used_chunks.length !== 1 ? "s" : ""})
+                          <span>
+                            Source {index + 1} ({source.used_chunks.length})
                           </span>
                         </button>
                       ))}
@@ -707,29 +856,25 @@ const QueryInterface = () => {
 
                   {/* Text-to-Speech and Copy buttons for assistant messages */}
                   {message.role === "assistant" && (
-                    <div className="flex items-center gap-2 mt-3 px-1">
+                    <div className="flex items-center gap-2 mt-3.5">
                       <button
                         onClick={() => speakText(message.content, message.id)}
                         disabled={playingMessageId === message.id}
-                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-all duration-200 hover:scale-105 shadow-sm hover:shadow-md ${
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 shadow-sm hover:shadow-md ${
                           playingMessageId === message.id
-                            ? "bg-gradient-to-r from-green-500/20 to-emerald-500/20 text-green-700 dark:text-green-300 border border-green-500/30 animate-pulse"
-                            : "bg-gradient-to-r from-purple-500/10 to-pink-500/10 hover:from-purple-500/20 hover:to-pink-500/20 text-purple-700 dark:text-purple-300 border border-purple-500/30"
+                            ? "bg-gradient-to-br from-green-100 to-green-50 dark:from-green-950/40 dark:to-green-900/30 text-green-700 dark:text-green-400 border border-green-300 dark:border-green-800"
+                            : "bg-gradient-to-br from-slate-100 to-slate-50 dark:from-slate-800 dark:to-slate-800/80 text-slate-700 dark:text-slate-300 hover:from-slate-200 hover:to-slate-100 dark:hover:from-slate-700 dark:hover:to-slate-700/80 border border-slate-300 dark:border-slate-700"
                         }`}
                       >
                         {playingMessageId === message.id ? (
                           <>
-                            <VolumeX className="h-3 w-3" />
-                            <span className="text-xs font-medium">
-                              Stop Audio
-                            </span>
+                            <VolumeX className="h-3.5 w-3.5" />
+                            <span>Stop</span>
                           </>
                         ) : (
                           <>
-                            <Volume2 className="h-3 w-3" />
-                            <span className="text-xs font-medium">
-                              Listen to Answer
-                            </span>
+                            <Volume2 className="h-3.5 w-3.5" />
+                            <span>Listen</span>
                           </>
                         )}
                       </button>
@@ -738,31 +883,29 @@ const QueryInterface = () => {
                         onClick={() =>
                           copyToClipboard(message.content, message.id)
                         }
-                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-all duration-200 hover:scale-105 shadow-sm hover:shadow-md ${
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 shadow-sm hover:shadow-md ${
                           copiedMessageId === message.id
-                            ? "bg-gradient-to-r from-green-500/20 to-emerald-500/20 text-green-700 dark:text-green-300 border border-green-500/30"
-                            : "bg-gradient-to-r from-blue-500/10 to-cyan-500/10 hover:from-blue-500/20 hover:to-cyan-500/20 text-blue-700 dark:text-blue-300 border border-blue-500/30"
+                            ? "bg-gradient-to-br from-green-100 to-green-50 dark:from-green-950/40 dark:to-green-900/30 text-green-700 dark:text-green-400 border border-green-300 dark:border-green-800"
+                            : "bg-gradient-to-br from-slate-100 to-slate-50 dark:from-slate-800 dark:to-slate-800/80 text-slate-700 dark:text-slate-300 hover:from-slate-200 hover:to-slate-100 dark:hover:from-slate-700 dark:hover:to-slate-700/80 border border-slate-300 dark:border-slate-700"
                         }`}
                       >
                         {copiedMessageId === message.id ? (
                           <>
-                            <Check className="h-3 w-3" />
-                            <span className="text-xs font-medium">Copied!</span>
+                            <Check className="h-3.5 w-3.5" />
+                            <span>Copied</span>
                           </>
                         ) : (
                           <>
-                            <Copy className="h-3 w-3" />
-                            <span className="text-xs font-medium">
-                              Copy Answer
-                            </span>
+                            <Copy className="h-3.5 w-3.5" />
+                            <span>Copy</span>
                           </>
                         )}
                       </button>
                     </div>
                   )}
 
-                  <p className="text-[10px] sm:text-xs text-muted-foreground/70 px-1 mt-2 flex items-center gap-1">
-                    <span className="inline-block w-1 h-1 rounded-full bg-muted-foreground/40"></span>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-500 mt-2.5 flex items-center gap-1.5 font-medium">
+                    <span className="inline-block w-1 h-1 rounded-full bg-slate-400 dark:bg-slate-600"></span>
                     {message.timestamp.toLocaleTimeString([], {
                       hour: "2-digit",
                       minute: "2-digit",
@@ -774,43 +917,49 @@ const QueryInterface = () => {
 
             {isProcessing && processingSteps.length > 0 && (
               <div className="flex justify-start animate-in slide-in-from-bottom-4 duration-300">
-                <div className="max-w-[85%] sm:max-w-[80%] lg:max-w-[75%]">
-                  <div className="bg-gradient-to-br from-blue-50 to-purple-50 dark:from-blue-950/30 dark:to-purple-950/30 border-2 border-blue-200 dark:border-blue-800 rounded-2xl px-4 sm:px-5 py-4 shadow-lg backdrop-blur-sm">
-                    <div className="space-y-2.5">
-                      <div className="flex items-center gap-2 mb-3">
-                        <Loader2 className="h-5 w-5 animate-spin text-blue-600 dark:text-blue-400" />
-                        <span className="text-sm font-semibold text-blue-900 dark:text-blue-100">
-                          Processing your query...
+                <div className="max-w-[85%] sm:max-w-[75%] lg:max-w-[70%]">
+                  <div className="bg-white dark:bg-slate-800/90 border border-blue-200 dark:border-blue-800/50 rounded-2xl px-5 py-4 shadow-sm">
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center justify-center h-8 w-8 rounded-full bg-blue-100 dark:bg-blue-950/50">
+                          <Loader2 className="h-4 w-4 animate-spin text-blue-600 dark:text-blue-400" />
+                        </div>
+                        <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                          Processing
                         </span>
                       </div>
-                      <div className="space-y-2">
+                      <div className="space-y-2.5 pl-10">
                         {processingSteps.map((step) => (
                           <div
                             key={step.id}
-                            className={`flex items-center gap-2.5 text-xs transition-all duration-300 ${
+                            className={`flex items-center gap-2.5 text-sm transition-all duration-300 ${
                               step.status === "complete"
-                                ? "text-green-700 dark:text-green-400"
+                                ? "text-green-600 dark:text-green-400"
                                 : step.status === "active"
-                                ? "text-blue-700 dark:text-blue-400 font-medium"
+                                ? "text-blue-600 dark:text-blue-400 font-medium"
                                 : "text-slate-400 dark:text-slate-600"
                             }`}
                           >
-                            <span
-                              className={`transition-all ${
-                                step.status === "complete"
-                                  ? "text-green-600 dark:text-green-400"
-                                  : step.status === "active"
-                                  ? "text-blue-600 dark:text-blue-400"
-                                  : "text-slate-400"
-                              }`}
-                            >
-                              {step.icon}
-                            </span>
-                            <span>{step.label}</span>
+                            <span className="flex-shrink-0">{step.icon}</span>
+                            <span className="flex-1">{step.label}</span>
                             {step.status === "complete" && (
-                              <span className="ml-auto text-green-600 dark:text-green-400 text-[10px] font-medium">
-                                ✓ Done
-                              </span>
+                              <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
+                            )}
+                            {step.status === "active" && (
+                              <div className="flex gap-1">
+                                <span
+                                  className="w-1.5 h-1.5 bg-blue-600 rounded-full animate-bounce"
+                                  style={{ animationDelay: "0ms" }}
+                                ></span>
+                                <span
+                                  className="w-1.5 h-1.5 bg-blue-600 rounded-full animate-bounce"
+                                  style={{ animationDelay: "150ms" }}
+                                ></span>
+                                <span
+                                  className="w-1.5 h-1.5 bg-blue-600 rounded-full animate-bounce"
+                                  style={{ animationDelay: "300ms" }}
+                                ></span>
+                              </div>
                             )}
                           </div>
                         ))}
@@ -826,31 +975,32 @@ const QueryInterface = () => {
         </ScrollArea>
       )}
 
-      {/* Premium fixed bottom input bar with unified send/mic button */}
-      <div className="fixed bottom-0 left-0 right-0 bg-gradient-to-t from-background via-background/98 to-background/95 backdrop-blur-2xl border-t-2 border-slate-200 dark:border-slate-800 shadow-[0_-4px_20px_rgba(0,0,0,0.1)] dark:shadow-[0_-4px_20px_rgba(0,0,0,0.5)] z-40 pb-10">
-        <div className="container mx-auto px-3 sm:px-4 md:px-6 lg:px-8 py-4">
+      <div className="fixed bottom-0 left-0 right-0 bg-gradient-to-t from-white via-white/95 to-white/90 dark:from-slate-950 dark:via-slate-950/95 dark:to-slate-950/90 backdrop-blur-xl border-t border-slate-200 dark:border-slate-800 shadow-[0_-2px_16px_rgba(0,0,0,0.08)] dark:shadow-[0_-2px_24px_rgba(0,0,0,0.4)] z-40 pb-10">
+        <div className="container mx-auto px-6 sm:px-8 md:px-12 lg:px-16 py-3">
           <form onSubmit={handleQuerySubmission}>
-            <div className="max-w-6xl mx-auto flex gap-2 sm:gap-3">
-              <Input
-                value={currentQuery}
-                onChange={(e) => setCurrentQuery(e.target.value)}
-                placeholder={
-                  isRecording
-                    ? "🎤 Listening..."
-                    : isTranscribing
-                    ? "⏳ Transcribing..."
-                    : "Ask a question about your documents..."
-                }
-                disabled={isProcessing || isRecording || isTranscribing}
-                className="flex-1 text-sm sm:text-base h-12 sm:h-14 rounded-2xl border-2 border-slate-300 dark:border-slate-700 focus-visible:ring-2 focus-visible:ring-blue-500/50 focus-visible:border-blue-500 shadow-lg bg-white dark:bg-slate-900 font-medium placeholder:text-slate-400"
-              />
+            <div className="max-w-7xl mx-auto flex items-center gap-3">
+              <div className="flex-1 relative">
+                <Input
+                  value={currentQuery}
+                  onChange={(e) => setCurrentQuery(e.target.value)}
+                  placeholder={
+                    isRecording
+                      ? "🎤 Listening..."
+                      : isTranscribing
+                      ? "⏳ Transcribing..."
+                      : "Ask cogent-x anything about your documents..."
+                  }
+                  disabled={isProcessing || isRecording || isTranscribing}
+                  className="w-full text-base h-14 rounded-2xl border-3 border-blue-400 dark:border-blue-500 focus-visible:ring-4 focus-visible:ring-blue-500/40 focus-visible:border-blue-600 shadow-[0_2px_16px_rgba(59,130,246,0.2)] hover:shadow-[0_4px_24px_rgba(59,130,246,0.3)] dark:shadow-[0_2px_20px_rgba(59,130,246,0.3)] dark:hover:shadow-[0_4px_28px_rgba(59,130,246,0.4)] transition-all duration-200 bg-white dark:bg-slate-900 placeholder:text-slate-400 font-medium pr-4"
+                />
+              </div>
 
-              {/* Unified Send/Mic Button */}
-              <div className="relative shrink-0">
+              {/* Clean Unified Send/Mic Button */}
+              <div className="shrink-0">
                 <button
                   type="button"
                   disabled={isProcessing || isTranscribing}
-                  className="group relative h-12 w-24 sm:h-14 sm:w-28 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 disabled:opacity-50 overflow-hidden"
+                  className="group relative h-14 w-14 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 overflow-hidden border-3 border-blue-400 dark:border-blue-500 hover:border-blue-500 dark:hover:border-blue-400"
                   onClick={(e) => {
                     if (buttonModeRef.current === "send") {
                       if (currentQuery.trim()) {
@@ -904,62 +1054,31 @@ const QueryInterface = () => {
                     }
                   }}
                 >
+                  {/* Background Gradient */}
                   <div
-                    className={`absolute inset-0 transition-all duration-300 ${
+                    className={`absolute inset-0 transition-all duration-300 rounded-2xl ${
                       isRecording
-                        ? "bg-gradient-to-br from-red-500 to-red-600 animate-pulse"
-                        : isVoiceMode && !isRecording
-                        ? "bg-gradient-to-br from-orange-500 to-red-500"
-                        : "bg-gradient-to-br from-blue-600 to-blue-700 group-hover:from-blue-700 group-hover:to-blue-800"
+                        ? "bg-gradient-to-br from-red-500 to-red-600"
+                        : currentQuery.trim()
+                        ? "bg-gradient-to-br from-blue-600 to-indigo-600 group-hover:from-blue-700 group-hover:to-indigo-700"
+                        : "bg-gradient-to-br from-slate-700 to-slate-800 group-hover:from-blue-600 group-hover:to-indigo-600"
                     }`}
                   />
 
-                  <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-[2px] bg-white/20" />
-
-                  <div
-                    className={`absolute inset-y-0 left-0 right-1/2 flex items-center justify-center transition-all duration-300 ${
-                      isRecording || (isVoiceMode && !currentQuery.trim())
-                        ? "bg-white/10"
-                        : ""
-                    }`}
-                  >
-                    <Mic
-                      className={`h-5 w-5 sm:h-6 sm:w-6 text-white transition-transform duration-200 ${
-                        isRecording ? "scale-110" : "group-hover:scale-110"
-                      }`}
-                    />
+                  {/* Icon Display */}
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    {isRecording ? (
+                      <div className="relative">
+                        <Mic className="h-6 w-6 text-white animate-pulse" />
+                        <div className="absolute -top-1 -right-1 h-2.5 w-2.5 bg-white rounded-full animate-ping" />
+                      </div>
+                    ) : currentQuery.trim() ? (
+                      <Send className="h-5 w-5 text-white transition-transform group-hover:scale-110 group-hover:translate-x-0.5" />
+                    ) : (
+                      <Mic className="h-5 w-5 text-white transition-transform group-hover:scale-110" />
+                    )}
                   </div>
-
-                  <div
-                    className={`absolute inset-y-0 right-0 left-1/2 flex items-center justify-center transition-all duration-300 ${
-                      currentQuery.trim() && !isVoiceMode ? "bg-white/10" : ""
-                    }`}
-                  >
-                    <Send
-                      className={`h-5 w-5 sm:h-6 sm:w-6 text-white transition-transform duration-200 ${
-                        currentQuery.trim()
-                          ? "scale-110"
-                          : "group-hover:scale-110"
-                      }`}
-                    />
-                  </div>
-
-                  {isRecording && (
-                    <div className="absolute -top-1 -right-1 h-3 w-3 bg-red-500 rounded-full animate-ping" />
-                  )}
                 </button>
-
-                <div className="absolute -bottom-5 left-0 right-0 text-center">
-                  <span className="text-[10px] text-muted-foreground whitespace-nowrap">
-                    {isRecording
-                      ? "🎙️ Recording..."
-                      : isTranscribing
-                      ? "⏳ Processing..."
-                      : currentQuery.trim()
-                      ? "Click right →"
-                      : "Click left ← to speak"}
-                  </span>
-                </div>
               </div>
             </div>
           </form>

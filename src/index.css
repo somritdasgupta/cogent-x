@@ -123,64 +123,90 @@ All colors MUST be HSL.
   .prose {
     @apply text-foreground;
   }
-  
+
   .prose p {
     @apply my-2;
   }
-  
-  .prose h1, .prose h2, .prose h3, .prose h4 {
+
+  .prose h1,
+  .prose h2,
+  .prose h3,
+  .prose h4 {
     @apply font-semibold mt-4 mb-2;
   }
-  
+
   .prose h1 {
     @apply text-xl;
   }
-  
+
   .prose h2 {
     @apply text-lg;
   }
-  
+
   .prose h3 {
     @apply text-base;
   }
-  
-  .prose ul, .prose ol {
+
+  .prose ul,
+  .prose ol {
     @apply my-2 ml-4;
   }
-  
+
   .prose li {
     @apply my-1;
   }
-  
+
   .prose code {
     @apply bg-muted px-1.5 py-0.5 rounded text-xs font-mono;
   }
-  
+
   .prose pre {
     @apply bg-muted p-3 rounded-lg overflow-x-auto my-3;
   }
-  
+
   .prose pre code {
     @apply bg-transparent p-0;
   }
-  
+
   .prose table {
     @apply w-full border-collapse my-3;
   }
-  
-  .prose th, .prose td {
+
+  .prose th,
+  .prose td {
     @apply border border-border px-3 py-2 text-left;
   }
-  
+
   .prose th {
     @apply bg-muted font-semibold;
   }
-  
+
   .prose blockquote {
     @apply border-l-4 border-primary pl-4 italic my-3;
   }
-  
+
   .prose a {
     @apply text-primary hover:underline;
   }
+}
+
+/* Custom animations for floating elements */
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  25% {
+    transform: translateY(-10px) rotate(2deg);
+  }
+  50% {
+    transform: translateY(-20px) rotate(-2deg);
+  }
+  75% {
+    transform: translateY(-10px) rotate(2deg);
+  }
+}
+
+.animate-float {
+  animation: float 8s ease-in-out infinite;
 }

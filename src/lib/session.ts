@@ -24,15 +24,19 @@ export const getSessionId = (): string => {
     if (expiry > new Date()) {
       // Session still valid, extend expiry
       updateSessionExpiry();
+      console.log("[Session] Using existing session:", existingId);
       return existingId;
     } else {
       // Session expired, clear it
+      console.log("[Session] Session expired, clearing:", existingId);
       clearSession();
     }
   }
 
   // No valid session, create new one
-  return createNewSession();
+  const newId = createNewSession();
+  console.log("[Session] Created new session:", newId);
+  return newId;
 };
 
 /**
@@ -60,6 +64,7 @@ const updateSessionExpiry = (): void => {
  * @param {string} sessionId - The session ID to store
  */
 export const setSessionId = (sessionId: string): void => {
+  console.log("[Session] Backend returned new session ID:", sessionId);
   localStorage.setItem(SESSION_STORAGE_KEY, sessionId);
   updateSessionExpiry();
 };

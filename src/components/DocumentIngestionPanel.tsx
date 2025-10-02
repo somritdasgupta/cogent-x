@@ -25,10 +25,22 @@ export const DocumentIngestionPanel = () => {
       const response = await apiGet(API_ENDPOINTS.KNOWLEDGE_BASES);
       if (response.ok) {
         const data = await response.json();
+        console.log(
+          "[DocumentIngestion] Knowledge bases received:",
+          data.knowledge_bases
+        );
         setKnowledgeBases(data.knowledge_bases || []);
+      } else {
+        console.error(
+          "[DocumentIngestion] Failed to fetch knowledge bases:",
+          response.status
+        );
       }
     } catch (error) {
-      console.error("Failed to fetch knowledge bases:", error);
+      console.error(
+        "[DocumentIngestion] Failed to fetch knowledge bases:",
+        error
+      );
     } finally {
       setIsLoadingKB(false);
     }
@@ -56,6 +68,7 @@ export const DocumentIngestionPanel = () => {
       }
 
       const data = await response.json();
+      console.log("[DocumentIngestion] Ingestion response:", data);
 
       toast({
         title: "Success",
@@ -63,6 +76,7 @@ export const DocumentIngestionPanel = () => {
       });
 
       setUrl("");
+      console.log("[DocumentIngestion] Refreshing knowledge bases...");
       fetchKnowledgeBases(); // Refresh knowledge bases
     } catch (error) {
       toast({

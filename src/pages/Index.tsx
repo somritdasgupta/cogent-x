@@ -1,25 +1,23 @@
 import QueryInterface from "@/components/QueryInterface";
 import { UnifiedSettingsPanel } from "@/components/UnifiedSettingsPanel";
-import { Github, BookOpen, Code } from "lucide-react";
+import { Github, BookOpen, Code, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getApiDocsUrl } from "@/config/api";
 
 const Index = () => {
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 sticky top-0 z-50">
-        <div className="container mx-auto px-3 sm:px-4 md:px-6 py-3">
+      <header className="border-b py-3 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md border-slate-200 dark:border-slate-800 sticky top-0 z-50">
+        <div className="container mx-auto px-3 sm:px-4 md:px-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 sm:gap-3">
-              <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-ai-gradient flex items-center justify-center overflow-hidden shadow-sm">
-                <img
-                  src="/favicon.ico"
-                  alt="cogent-x"
-                  className="w-5 h-5 sm:w-6 sm:h-6 object-contain"
-                />
-              </div>
+              <img
+                src="/favicon.svg"
+                alt="cogent-x logo"
+                className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg shadow-md"
+              />
               <div>
-                <h1 className="text-lg sm:text-2xl font-black text-foreground">
+                <h1 className="text-lg sm:text-2xl font-black text-slate-900 dark:text-white">
                   cogent-x
                 </h1>
               </div>
@@ -27,9 +25,9 @@ const Index = () => {
 
             <div className="flex items-center gap-2">
               <Button
-                variant="ghost"
+                variant="outline"
                 size="sm"
-                className="gap-1.5 text-xs px-2 h-8"
+                className="gap-2 border border-slate-300 dark:border-slate-700 hover:border-blue-500 dark:hover:border-blue-400 hover:bg-blue-50 dark:hover:bg-slate-800 transition-all duration-200"
                 onClick={() =>
                   window.open(
                     "https://stats.uptimerobot.com/FxzeOvqyqU",
@@ -42,12 +40,12 @@ const Index = () => {
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
                 </span>
-                <span className="hidden sm:inline font-medium">Status</span>
+                <span className="hidden sm:inline">Status</span>
               </Button>
               <Button
                 variant="outline"
                 size="sm"
-                className="gap-2"
+                className="gap-2 border border-slate-300 dark:border-slate-700 hover:border-blue-500 dark:hover:border-blue-400 hover:bg-blue-50 dark:hover:bg-slate-800 transition-all duration-200"
                 onClick={() => window.open(getApiDocsUrl(), "_blank")}
               >
                 <BookOpen className="h-4 w-4" />

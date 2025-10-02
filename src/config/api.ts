@@ -136,6 +136,11 @@ export const apiRequest = async (
   const url = buildApiUrl(endpoint);
   const sessionId = getSessionId();
 
+  console.log(
+    `[API] ${options.method || "GET"} ${endpoint} with session:`,
+    sessionId
+  );
+
   // Merge headers with session ID
   const headers = new Headers(options.headers);
   headers.set("X-Session-Id", sessionId);
@@ -145,6 +150,13 @@ export const apiRequest = async (
     ...options,
     headers,
   });
+
+  console.log(
+    `[API] Response from ${endpoint}:`,
+    response.status,
+    "Session header:",
+    response.headers.get("X-Session-Id")
+  );
 
   // Process response to update session ID if backend returns a new one
   processApiResponse(response);

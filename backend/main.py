@@ -61,9 +61,9 @@ def ensure_ffmpeg_in_path():
 ffmpeg_available = ensure_ffmpeg_in_path()
 if not ffmpeg_available:
     logger.warning(
-        "⚠️ ffmpeg not found! Voice transcription will fail. Install with: winget install ffmpeg")
+        "ffmpeg not found! Voice transcription will fail. Install with: winget install ffmpeg")
     logger.warning(
-        "⚠️ After installation, restart the terminal for PATH changes to take effect.")
+        "After installation, restart the terminal for PATH changes to take effect.")
 else:
     logger.info("✓ ffmpeg found and ready for WhisperX")
 
@@ -92,7 +92,7 @@ whisperx_device = None
 # Initialize FastAPI with custom docs URLs
 # Initialize FastAPI with custom docs URLs
 app = FastAPI(
-    title="cogent-x RAG System",
+    title="cogent-x",
     version="2.0.0",
     docs_url="/api/docs",  # Swagger UI
     redoc_url="/api/redoc",  # ReDoc
@@ -106,6 +106,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["X-Session-Id"],  # Allow frontend to read this header
 )
 
 
@@ -116,7 +117,7 @@ async def root():
     """Root endpoint showing service status"""
     return {
         "status": "online",
-        "service": "Cogent-X RAG API",
+        "service": "cogent-x API",
         "version": "2.0.0",
         "description": "AI-powered knowledge base with RAG capabilities",
         "documentation": {
@@ -900,9 +901,15 @@ async def ingest_document(
     """Ingest and process document from URL - Session isolated for privacy"""
 
     try:
+        logger.info(
+            f"[INGEST] Received session ID from client: {x_session_id}")
+
         # Get or create isolated session
         session_id, session_db = session_manager.get_or_create_session(
             x_session_id)
+
+        logger.info(
+            f"[INGEST] Using session ID: {session_id} (new: {session_id != x_session_id})")
 
         # Set session ID in response header for client to store
         response.headers["X-Session-Id"] = session_id
@@ -953,6 +960,8 @@ async def ingest_document(
         )
         logger.info(
             f"✓ Successfully ingested {len(chunks)} chunks into isolated session")
+        logger.info(
+            f"[INGEST] Session {session_id} now has {session_db.count()} total chunks")
 
         return {
             "message": "Document ingested successfully",
@@ -970,19 +979,26 @@ async def ingest_document(
 
 
 @app.get("/api/v1/knowledge-bases")
-async def get_knowledge_bases():
-    """Get list of ingested sources"""
+async def get_knowledge_bases(x_session_id: Optional[str] = Header(None)):
+    """Get list of ingested sources from the user's session"""
     try:
-        # Get all unique sources
-        sources = set()
+        # Get session database if it exists
+        if not x_session_id:
+            return {"knowledge_bases": []}
 
-        for metadata in vector_db.metadatas:
+        session_db = session_manager.get_session(x_session_id)
+        if not session_db:
+            return {"knowledge_bases": []}
+
+        # Get all unique sources from session database
+        sources = set()
+        for metadata in session_db.metadatas:
             if metadata and metadata.get("title"):
                 sources.add(metadata["title"])
 
         return {"knowledge_bases": sorted(list(sources))}
     except Exception as e:
-        print(f"Error fetching knowledge bases: {e}")
+        logger.error(f"Error fetching knowledge bases: {e}")
         return {"knowledge_bases": []}
 
 
@@ -1714,7 +1730,7 @@ async def delete_session(x_session_id: Optional[str] = Header(None)):
 if __name__ == "__main__":
     import uvicorn
     print("=" * 60)
-    print("Starting cogent-x RAG Backend Server")
+    print("Starting cogent-x Backend Server")
     print("=" * 60)
     print(f"FAISS available: {faiss is not None}")
     print(f"BeautifulSoup available: {BeautifulSoup is not None}")
@@ -1722,6 +1738,6 @@ if __name__ == "__main__":
     print(f"Configuration loaded: {CURRENT_CONFIG is not None}")
     print("=" * 60)
     print("Server will start on: http://0.0.0.0:8000")
-    print("API docs available at: http://localhost:8000/docs")
+    print("API docs available at: http://localhost:8000/api/docs")
     print("=" * 60)
     uvicorn.run(app, host="0.0.0.0", port=8000)

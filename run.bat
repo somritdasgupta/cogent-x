@@ -1,8 +1,8 @@
 @echo off
-REM cogent-x Smart Unified Startup Script for Windows
+REM cogent-x Quick Start Script for Windows
 REM Double-click this file to start everything!
 
-title cogent-x RAG System - Smart Start
+title cogent-x - Quick Start
 
 REM Check if Python is installed
 python --version >nul 2>&1
