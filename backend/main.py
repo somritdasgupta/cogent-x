@@ -16,6 +16,12 @@ import logging
 import traceback
 from uuid import uuid4
 from datetime import datetime, timedelta
+import warnings
+
+# Suppress deprecation warnings from pyannote/torchaudio
+warnings.filterwarnings("ignore", category=UserWarning,
+                        module="pyannote.audio.core.io")
+warnings.filterwarnings("ignore", message=".*torchaudio._backend.*")
 
 # Configure logging first
 logging.basicConfig(level=logging.INFO)
@@ -26,33 +32,51 @@ logger = logging.getLogger(__name__)
 
 def ensure_ffmpeg_in_path():
     """Ensure ffmpeg is accessible by adding common install locations to PATH"""
-    # Check if ffmpeg is already accessible
     import shutil
+    import platform
+
+    # Check if ffmpeg is already accessible
     if shutil.which("ffmpeg") is not None:
         return True
 
-    # Common ffmpeg installation paths on Windows
-    possible_paths = [
-        Path(os.environ.get("LOCALAPPDATA", "")) /
-        "Microsoft" / "WinGet" / "Links",
-        Path(os.environ.get("LOCALAPPDATA", "")) / "Microsoft" / "WinGet" / "Packages" /
-        "Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe" /
-        "ffmpeg-8.0-full_build" / "bin",
-        Path("C:/ffmpeg/bin"),
-        Path("C:/Program Files/ffmpeg/bin"),
-        Path(os.environ.get("ProgramFiles", "")) / "ffmpeg" / "bin",
-    ]
+    system = platform.system()
 
-    # Add each path that exists to system PATH
-    for path in possible_paths:
-        if path.exists():
-            path_str = str(path.resolve())
-            if path_str not in os.environ["PATH"]:
-                os.environ["PATH"] = path_str + os.pathsep + os.environ["PATH"]
-                logger.info(f"Added ffmpeg path: {path_str}")
-                # Check again
-                if shutil.which("ffmpeg") is not None:
-                    return True
+    # Common ffmpeg installation paths on Windows
+    if system == "Windows":
+        possible_paths = [
+            Path(os.environ.get("LOCALAPPDATA", "")) /
+            "Microsoft" / "WinGet" / "Links",
+            Path(os.environ.get("LOCALAPPDATA", "")) / "Microsoft" / "WinGet" / "Packages" /
+            "Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe" /
+            "ffmpeg-8.0-full_build" / "bin",
+            Path("C:/ffmpeg/bin"),
+            Path("C:/Program Files/ffmpeg/bin"),
+            Path(os.environ.get("ProgramFiles", "")) / "ffmpeg" / "bin",
+        ]
+
+        # Add each path that exists to system PATH
+        for path in possible_paths:
+            if path.exists():
+                path_str = str(path.resolve())
+                if path_str not in os.environ["PATH"]:
+                    os.environ["PATH"] = path_str + \
+                        os.pathsep + os.environ["PATH"]
+                    logger.info(f"Added ffmpeg path: {path_str}")
+                    # Check again
+                    if shutil.which("ffmpeg") is not None:
+                        return True
+
+    # On Linux (Render/Docker), ffmpeg should be installed via apt-get
+    # Check common Linux locations
+    elif system == "Linux":
+        linux_paths = [
+            Path("/usr/bin"),
+            Path("/usr/local/bin"),
+        ]
+        for path in linux_paths:
+            ffmpeg_bin = path / "ffmpeg"
+            if ffmpeg_bin.exists():
+                return True
 
     return shutil.which("ffmpeg") is not None
 
@@ -60,12 +84,22 @@ def ensure_ffmpeg_in_path():
 # Try to ensure ffmpeg is available
 ffmpeg_available = ensure_ffmpeg_in_path()
 if not ffmpeg_available:
-    logger.warning(
-        "ffmpeg not found! Voice transcription will fail. Install with: winget install ffmpeg")
-    logger.warning(
-        "After installation, restart the terminal for PATH changes to take effect.")
+    import platform
+    system = platform.system()
+    if system == "Windows":
+        logger.warning(
+            "⚠️ ffmpeg not found! Voice transcription will fail. Install with: winget install ffmpeg")
+        logger.warning(
+            "After installation, restart the terminal for PATH changes to take effect.")
+    elif system == "Linux":
+        logger.warning(
+            "⚠️ ffmpeg not found! Voice transcription will fail.")
+        logger.warning(
+            "On Render: Ensure build.sh runs 'apt-get install -y ffmpeg'")
+        logger.warning(
+            "On Docker: Ensure Dockerfile has 'RUN apt-get update && apt-get install -y ffmpeg'")
 else:
-    logger.info("✓ ffmpeg found and ready for WhisperX")
+    logger.info("✓ ffmpeg found and ready for WhisperX transcription")
 
 try:
     import faiss
@@ -779,11 +813,22 @@ Answer:"""
 
 # ============= Health Checks =============
 def check_ollama_health() -> bool:
-    """Check if Ollama is running"""
+    """Check if any LLM service is available (Ollama, OpenAI, or Gemini)"""
+    # Check if OpenAI API key is configured
+    openai_key = CURRENT_CONFIG.get("openai_api_key", "").strip()
+    if openai_key and len(openai_key) > 10 and "•" not in openai_key:
+        return True
+
+    # Check if Gemini API key is configured
+    gemini_key = CURRENT_CONFIG.get("gemini_api_key", "").strip()
+    if gemini_key and len(gemini_key) > 10 and "•" not in gemini_key:
+        return True
+
+    # Check if Ollama is running
     try:
         ollama_url = CURRENT_CONFIG.get(
             "ollama_base_url", "http://localhost:11434")
-        response = requests.get(f"{ollama_url}/api/tags", timeout=5)
+        response = requests.get(f"{ollama_url}/api/tags", timeout=2)
         return response.status_code == 200
     except:
         return False
@@ -1103,6 +1148,14 @@ async def transcribe_audio(file: UploadFile = File(...)):
     Supports: mp3, mp4, mpeg, mpga, m4a, wav, webm, flac, ogg
     """
     try:
+        # Check if ffmpeg is available
+        import shutil
+        if not shutil.which("ffmpeg"):
+            raise HTTPException(
+                status_code=503,
+                detail="Speech-to-text unavailable: ffmpeg not installed on server. Contact administrator."
+            )
+
         # Check if file is provided
         if not file:
             raise HTTPException(
@@ -1164,6 +1217,8 @@ async def transcribe_audio(file: UploadFile = File(...)):
                 # Determine device (GPU if available, otherwise CPU)
                 whisperx_device = "cuda" if torch.cuda.is_available() else "cpu"
                 compute_type = "float16" if whisperx_device == "cuda" else "int8"
+
+                logger.info(f"Loading WhisperX model on {whisperx_device}...")
 
                 # Load WhisperX model - using TINY for 3x faster speed!
                 # Model sizes: tiny (fastest), base, small, medium, large-v2 (slowest but most accurate)
@@ -1344,6 +1399,7 @@ async def text_to_speech(text: str = Form(...)):
         # Use Edge TTS (Microsoft AI voices - best quality, no fallbacks)
         try:
             import edge_tts
+            import asyncio
 
             # Create temp file for audio
             temp_audio = tempfile.NamedTemporaryFile(
@@ -1365,8 +1421,14 @@ async def text_to_speech(text: str = Form(...)):
                 pitch="+0Hz"  # Natural pitch
             )
 
-            # Save audio directly with await (we're already in async context)
-            await communicate.save(str(temp_audio_path))
+            # Save audio with timeout for production environments
+            try:
+                await asyncio.wait_for(communicate.save(str(temp_audio_path)), timeout=30.0)
+            except asyncio.TimeoutError:
+                raise HTTPException(
+                    status_code=504,
+                    detail="Text-to-speech timed out. Please try with shorter text."
+                )
 
             logger.info(
                 f"✓ TTS generated with Edge TTS (AI voice, natural pauses): {temp_audio_path}")

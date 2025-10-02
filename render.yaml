@@ -1,0 +1,22 @@
+services:
+  # Backend API Service
+  - type: web
+    name: cogent-x-backend
+    runtime: python
+    region: oregon
+    plan: free
+    buildCommand: chmod +x backend/build.sh && backend/build.sh
+    startCommand: cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.0
+
+  # Frontend Static Site
+  - type: web
+    name: cogent-x-frontend
+    runtime: static
+    region: oregon
+    plan: free
+    buildCommand: npm install && npm run build
+    rootDir: ./dist
+    pullRequestPreviewsEnabled: true
