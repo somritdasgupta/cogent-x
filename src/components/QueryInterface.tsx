@@ -482,7 +482,17 @@ const QueryInterface = () => {
         )
       );
 
-      if (!response.ok) throw new Error("Query failed");
+      if (!response.ok) {
+        const errorText = await response.text();
+        let errorMessage = "Query failed";
+        try {
+          const errorData = JSON.parse(errorText);
+          errorMessage = errorData.detail || errorData.message || errorMessage;
+        } catch {
+          errorMessage = errorText || errorMessage;
+        }
+        throw new Error(errorMessage);
+      }
 
       const data = await response.json();
 
@@ -524,15 +534,50 @@ const QueryInterface = () => {
 
       setMessages((prev) => [...prev, assistantMessage]);
     } catch (error) {
+      console.error("Query error:", error);
+
+      let errorContent = "Unable to process query. ";
+
+      if (error instanceof TypeError && error.message.includes("fetch")) {
+        errorContent +=
+          "Cannot connect to backend. Please check:\n\n" +
+          "1. Backend service is running\n" +
+          "2. VITE_API_BASE_URL is set correctly in environment variables\n" +
+          "3. Backend URL is accessible from your browser\n\n" +
+          `Current API base URL: ${
+            import.meta.env.VITE_API_BASE_URL || "using proxy"
+          }`;
+      } else if (error instanceof Error) {
+        errorContent += error.message;
+
+        // Add helpful context for common errors
+        if (error.message.includes("session")) {
+          errorContent +=
+            "\n\nTip: Try ingesting a document first to create a session.";
+        } else if (error.message.includes("API key")) {
+          errorContent +=
+            "\n\nPlease configure your API key in the settings panel.";
+        }
+      } else {
+        errorContent +=
+          "An unexpected error occurred. Check browser console for details.";
+      }
+
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
-        content:
-          "Unable to process query. Please check if the backend is running.",
+        content: errorContent,
         timestamp: new Date(),
       };
 
       setMessages((prev) => [...prev, errorMessage]);
+
+      toast({
+        title: "Query Failed",
+        description:
+          error instanceof Error ? error.message : "Unknown error occurred",
+        variant: "destructive",
+      });
     } finally {
       setIsProcessing(false);
       setTimeout(() => setProcessingSteps([]), 500);

@@ -141,28 +141,37 @@ export const apiRequest = async (
     `[API] ${options.method || "GET"} ${endpoint} with session:`,
     sessionId
   );
+  console.log(`[API] Full URL:`, url);
+  console.log(`[API] Base URL from env:`, import.meta.env.VITE_API_BASE_URL);
 
   // Merge headers with session ID
   const headers = new Headers(options.headers);
   headers.set("X-Session-Id", sessionId);
 
   // Make the request
-  const response = await fetch(url, {
-    ...options,
-    headers,
-  });
+  try {
+    const response = await fetch(url, {
+      ...options,
+      headers,
+    });
 
-  console.log(
-    `[API] Response from ${endpoint}:`,
-    response.status,
-    "Session header:",
-    response.headers.get("X-Session-Id")
-  );
+    console.log(
+      `[API] Response from ${endpoint}:`,
+      response.status,
+      response.statusText,
+      "Session header:",
+      response.headers.get("X-Session-Id")
+    );
 
-  // Process response to update session ID if backend returns a new one
-  processApiResponse(response);
+    // Process response to update session ID if backend returns a new one
+    processApiResponse(response);
 
-  return response;
+    return response;
+  } catch (error) {
+    console.error(`[API] Request failed for ${endpoint}:`, error);
+    console.error(`[API] URL attempted:`, url);
+    throw error;
+  }
 };
 
 /**
