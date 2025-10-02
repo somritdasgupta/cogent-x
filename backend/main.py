@@ -390,7 +390,7 @@ class VectorDatabase:
 # ============= Session Management for Data Isolation =============
 # This ensures each user's documents are isolated and private
 class SessionManager:
-    """Manages isolated vector databases per session for privacy"""
+    """Manages isolated vector databases AND configurations per session for privacy"""
 
     def __init__(self, session_timeout_hours: int = 24):
         self.sessions: Dict[str, Dict[str, Any]] = {}
@@ -411,7 +411,8 @@ class SessionManager:
                 # Create without loading from disk
                 'db': VectorDatabase.__new__(VectorDatabase),
                 'created_at': datetime.now(),
-                'last_accessed': datetime.now()
+                'last_accessed': datetime.now(),
+                'config': DEFAULT_CONFIG.copy()  # Each session gets its own config
             }
             # Initialize the database without loading global data
             db = self.sessions[session_id]['db']
@@ -446,6 +447,26 @@ class SessionManager:
             del self.sessions[session_id]
             logger.info(f"Manually deleted session: {session_id}")
             return True
+        return False
+
+    def get_session_config(self, session_id: str) -> Optional[Dict[str, Any]]:
+        """Get session-specific configuration"""
+        if session_id in self.sessions:
+            session = self.sessions[session_id]
+            if not self._is_expired(session):
+                session['last_accessed'] = datetime.now()
+                return session.get('config', DEFAULT_CONFIG.copy())
+        return None
+
+    def set_session_config(self, session_id: str, config: Dict[str, Any]) -> bool:
+        """Set session-specific configuration"""
+        if session_id in self.sessions:
+            session = self.sessions[session_id]
+            if not self._is_expired(session):
+                session['config'] = config
+                session['last_accessed'] = datetime.now()
+                logger.info(f"Updated config for session: {session_id}")
+                return True
         return False
 
     def _is_expired(self, session: Dict[str, Any]) -> bool:
@@ -511,14 +532,20 @@ def get_embedding_model():
     return embedding_model
 
 
-def get_embeddings(texts: List[str], provider: str = "opensource", task_type: str = "retrieval_document") -> List[List[float]]:
+def get_embeddings(texts: List[str], provider: str = "opensource", task_type: str = "retrieval_document", config: Optional[Dict[str, Any]] = None) -> List[List[float]]:
     """Generate embeddings based on provider (OPTIMIZED with batch processing)
 
     Args:
         texts: List of text strings to embed
         provider: AI provider ("opensource", "openai", "gemini")
         task_type: Task type for embeddings ("retrieval_document" for ingestion, "retrieval_query" for queries)
+        config: Session-specific config (uses global if not provided)
     """
+    # Use session config if provided, otherwise fall back to global
+    active_config = config if config is not None else CURRENT_CONFIG
+
+    # Use session config if provided, otherwise fall back to global
+    active_config = config if config is not None else CURRENT_CONFIG
 
     if provider == "openai":
         # Use OpenAI embeddings with batch processing
@@ -528,13 +555,13 @@ def get_embeddings(texts: List[str], provider: str = "opensource", task_type: st
             raise HTTPException(
                 status_code=500, detail="OpenAI package not installed. Run: pip install openai")
 
-        api_key = CURRENT_CONFIG.get("openai_api_key")
+        api_key = active_config.get("openai_api_key")
         if not api_key:
             raise HTTPException(
                 status_code=400, detail="OpenAI API key not configured")
 
         client = openai.OpenAI(api_key=api_key)
-        model = CURRENT_CONFIG.get(
+        model = active_config.get(
             "openai_embedding_model", "text-embedding-3-small")
 
         # Batch processing (OpenAI supports up to 2048 texts at once)
@@ -561,7 +588,7 @@ def get_embeddings(texts: List[str], provider: str = "opensource", task_type: st
             raise HTTPException(
                 status_code=500, detail="Google Generative AI package not installed. Run: pip install google-generativeai")
 
-        api_key = CURRENT_CONFIG.get("gemini_api_key")
+        api_key = active_config.get("gemini_api_key")
         if not api_key:
             raise HTTPException(
                 status_code=400, detail="Gemini API key not configured")
@@ -569,7 +596,7 @@ def get_embeddings(texts: List[str], provider: str = "opensource", task_type: st
         genai.configure(api_key=api_key)
 
         # Use text-embedding-004 (newer model) or embedding-001 (legacy)
-        embedding_model = CURRENT_CONFIG.get(
+        embedding_model = active_config.get(
             "gemini_embedding_model", "models/text-embedding-004")
 
         embeddings = []
@@ -715,8 +742,10 @@ def chunk_text(text: str, chunk_size: int = 1000, overlap: int = 200) -> List[st
 
 
 # ============= LLM Integration =============
-def query_llm(prompt: str, context: str, provider: str) -> str:
+def query_llm(prompt: str, context: str, provider: str, config: Optional[Dict[str, Any]] = None) -> str:
     """Query LLM with context"""
+    # Use session config if provided, otherwise fall back to global
+    active_config = config if config is not None else CURRENT_CONFIG
 
     full_prompt = f"""Based on the following context, answer the question accurately and concisely.
 
@@ -729,9 +758,9 @@ Answer:"""
 
     if provider == "opensource":
         # Use Ollama
-        ollama_url = CURRENT_CONFIG.get(
+        ollama_url = active_config.get(
             "ollama_base_url", "http://localhost:11434")
-        model = CURRENT_CONFIG.get("ollama_model", "llama3:8b")
+        model = active_config.get("ollama_model", "llama3:8b")
 
         try:
             response = requests.post(
@@ -758,13 +787,13 @@ Answer:"""
             raise HTTPException(
                 status_code=500, detail="OpenAI package not installed. Run: pip install openai")
 
-        api_key = CURRENT_CONFIG.get("openai_api_key")
+        api_key = active_config.get("openai_api_key")
         if not api_key:
             raise HTTPException(
                 status_code=400, detail="OpenAI API key not configured")
 
         client = openai.OpenAI(api_key=api_key)
-        model = CURRENT_CONFIG.get("openai_model", "gpt-4")
+        model = active_config.get("openai_model", "gpt-4")
 
         try:
             response = client.chat.completions.create(
@@ -886,11 +915,21 @@ async def health_check():
 
 
 @app.get("/api/v1/config")
-async def get_configuration():
-    """Get current configuration with masked API keys"""
-    config = CURRENT_CONFIG.copy()
+async def get_configuration(
+    response: Response,
+    x_session_id: Optional[str] = Header(None)
+):
+    """Get SESSION-SPECIFIC configuration with masked API keys - Privacy Protected!"""
+    # Get or create session
+    session_id, _ = session_manager.get_or_create_session(x_session_id)
+    response.headers["X-Session-Id"] = session_id
 
-    # Mask API keys
+    # Get session-specific config
+    config = session_manager.get_session_config(session_id)
+    if not config:
+        config = DEFAULT_CONFIG.copy()
+
+    # Mask API keys for display
     if config.get("openai_api_key"):
         key = config["openai_api_key"]
         if len(key) > 8:
@@ -902,35 +941,47 @@ async def get_configuration():
             config["gemini_api_key"] = key[:4] + \
                 "•" * (len(key) - 8) + key[-4:]
 
+    logger.info(
+        f"[CONFIG] Returning session-specific config for: {session_id}")
     return config
 
 
 @app.put("/api/v1/config")
-async def update_configuration(config: Configuration):
-    """Update configuration"""
-    global CURRENT_CONFIG
-
+async def update_configuration(
+    config: Configuration,
+    response: Response,
+    x_session_id: Optional[str] = Header(None)
+):
+    """Update SESSION-SPECIFIC configuration - Each user has their own API keys!"""
     try:
+        # Get or create session
+        session_id, _ = session_manager.get_or_create_session(x_session_id)
+        response.headers["X-Session-Id"] = session_id
+
         new_config = config.dict()
+
+        # Get current session config to preserve masked keys
+        current_session_config = session_manager.get_session_config(session_id)
+        if not current_session_config:
+            current_session_config = DEFAULT_CONFIG.copy()
 
         # Keep existing keys if masked
         if new_config.get("openai_api_key") and "•" in new_config["openai_api_key"]:
-            new_config["openai_api_key"] = CURRENT_CONFIG.get(
+            new_config["openai_api_key"] = current_session_config.get(
                 "openai_api_key", "")
         if new_config.get("gemini_api_key") and "•" in new_config["gemini_api_key"]:
-            new_config["gemini_api_key"] = CURRENT_CONFIG.get(
+            new_config["gemini_api_key"] = current_session_config.get(
                 "gemini_api_key", "")
 
-        save_config(new_config)
-        CURRENT_CONFIG = new_config
+        # Save to SESSION-SPECIFIC config (not global!)
+        session_manager.set_session_config(session_id, new_config)
 
-        # Reload embedding model if changed
-        global embedding_model
-        embedding_model = None
+        logger.info(
+            f"[CONFIG] Updated session-specific config for: {session_id}")
 
         return {
-            "message": "Configuration updated successfully",
-            "note": "Restart backend for full effect"
+            "message": "Configuration updated for your session",
+            "note": "Config is private to your session only"
         }
     except Exception as e:
         raise HTTPException(
@@ -962,13 +1013,18 @@ async def ingest_document(
         logger.info(
             f"Starting ingestion for: {request.url} (Session: {session_id})")
 
+        # Get session-specific config
+        session_config = session_manager.get_session_config(session_id)
+        if not session_config:
+            session_config = DEFAULT_CONFIG.copy()
+
         # Scrape URL (with progress logging)
         scraped_data = scrape_url(request.url)
         logger.info(f"✓ Scraped: {scraped_data['title']}")
 
         # Chunk content (optimized)
-        chunk_size = CURRENT_CONFIG.get("chunk_size", 1000)
-        chunk_overlap = CURRENT_CONFIG.get("chunk_overlap", 200)
+        chunk_size = session_config.get("chunk_size", 1000)
+        chunk_overlap = session_config.get("chunk_overlap", 200)
         logger.info(f"Chunking text ({len(scraped_data['content'])} chars)...")
         chunks = chunk_text(scraped_data["content"], chunk_size, chunk_overlap)
 
@@ -981,7 +1037,7 @@ async def ingest_document(
         logger.info(
             f"Generating embeddings for {len(chunks)} chunks using {provider}...")
         embeddings = get_embeddings(
-            chunks, provider, task_type="retrieval_document")
+            chunks, provider, task_type="retrieval_document", config=session_config)
         logger.info(f"✓ Generated {len(embeddings)} embeddings")
 
         # Prepare metadata (list comprehension is already fast)
@@ -1071,15 +1127,20 @@ async def query_documents(
                 "session_expired": True
             }
 
+        # Get session-specific config
+        session_config = session_manager.get_session_config(x_session_id)
+        if not session_config:
+            session_config = DEFAULT_CONFIG.copy()
+
         logger.info(
             f"Querying session-isolated database (Session: {x_session_id})")
 
         # Generate query embedding
         query_embedding = get_embeddings(
-            [request.query], request.provider, task_type="retrieval_query")[0]
+            [request.query], request.provider, task_type="retrieval_query", config=session_config)[0]
 
         # Retrieve relevant chunks from SESSION database only
-        top_k = CURRENT_CONFIG.get("top_k_results", 5)
+        top_k = session_config.get("top_k_results", 5)
         results = session_db.search(query_embedding, k=top_k)
 
         if not results or not results.get("documents") or not results["documents"][0]:
@@ -1094,8 +1155,9 @@ async def query_documents(
 
         context = "\n\n".join(documents)
 
-        # Query LLM
-        answer = query_llm(request.query, context, request.provider)
+        # Query LLM with session-specific config
+        answer = query_llm(request.query, context,
+                           request.provider, config=session_config)
 
         # Prepare unique sources with their used chunk indices
         source_chunks = {}

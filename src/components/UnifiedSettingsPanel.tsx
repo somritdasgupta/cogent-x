@@ -753,35 +753,6 @@ export const UnifiedSettingsPanel = () => {
                       )}
                     </div>
                   </div>
-
-                  {/* UptimeRobot Status Page Link */}
-                  <div className="mt-4 p-3 rounded-lg bg-gradient-to-r from-blue-500/10 to-blue-600/10 border border-blue-500/20">
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1">
-                        <h4 className="text-xs font-semibold text-blue-700 dark:text-blue-400 flex items-center gap-1.5">
-                          <Activity className="h-3.5 w-3.5" />
-                          Live Uptime Monitor
-                        </h4>
-                        <p className="text-[10px] text-muted-foreground mt-0.5">
-                          Real-time monitoring powered by UptimeRobot
-                        </p>
-                      </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="gap-1.5 text-xs"
-                        onClick={() =>
-                          window.open(
-                            "https://stats.uptimerobot.com/FxzeOvqyqU",
-                            "_blank"
-                          )
-                        }
-                      >
-                        <ExternalLink className="h-3 w-3" />
-                        View Status Page
-                      </Button>
-                    </div>
-                  </div>
                 </div>
 
                 <Separator className="my-6" />
@@ -834,24 +805,6 @@ export const UnifiedSettingsPanel = () => {
 
                   {/* Session Info Card */}
                   <SessionInfo />
-
-                  {dbStats.collections.length > 0 && (
-                    <div className="space-y-2">
-                      <Label className="text-xs font-medium">Collections</Label>
-                      <div className="flex flex-wrap gap-1.5">
-                        {dbStats.collections.map((collection, idx) => (
-                          <Badge
-                            key={idx}
-                            variant="outline"
-                            className="text-xs"
-                          >
-                            <Database className="h-3 w-3 mr-1" />
-                            {collection}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                  )}
 
                   {/* Sources List */}
                   <div className="space-y-3 mt-4">

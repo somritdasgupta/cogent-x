@@ -33,7 +33,8 @@ export const getApiBaseUrl = (): string => {
 export const getApiDocsUrl = (): string => {
   // Check if we have an environment variable set
   if (import.meta.env.VITE_API_BASE_URL) {
-    return `${import.meta.env.VITE_API_BASE_URL}/api/docs`;
+    const baseUrl = import.meta.env.VITE_API_BASE_URL.replace(/\/+$/, ""); // Remove trailing slashes
+    return `${baseUrl}/api/docs`;
   }
 
   // In development, the backend is on port 8000

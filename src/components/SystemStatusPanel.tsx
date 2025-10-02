@@ -1,16 +1,10 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { CheckCircle, AlertCircle } from "lucide-react";
-import { buildApiUrl, API_ENDPOINTS, apiGet } from "@/config/api";
+import { CheckCircle, AlertCircle, ExternalLink } from "lucide-react";
+import { API_ENDPOINTS, apiGet } from "@/config/api";
 
 interface SystemStatus {
   backend: boolean;
@@ -25,13 +19,9 @@ export const SystemStatusPanel = () => {
     vectorDB: false,
   });
 
-  const [aiProvider, setAiProvider] = useState(
-    () => localStorage.getItem("aiProvider") || "opensource"
-  );
-
-  useEffect(() => {
-    localStorage.setItem("aiProvider", aiProvider);
-  }, [aiProvider]);
+  // Uptime Robot status page URL - can be configured via environment variable
+  const uptimeStatusPageUrl =
+    import.meta.env.VITE_UPTIME_STATUS_PAGE || "https://status.uptimerobot.com";
 
   useEffect(() => {
     const checkStatus = async () => {
@@ -43,15 +33,24 @@ export const SystemStatusPanel = () => {
         }
       } catch (error) {
         console.error("Health check failed:", error);
+        setStatus({
+          backend: false,
+          llm: false,
+          vectorDB: false,
+        });
       }
     };
 
     checkStatus();
-    const interval = setInterval(checkStatus, 30000);
+    const interval = setInterval(checkStatus, 30000); // Check every 30s
     return () => clearInterval(interval);
   }, []);
 
   const isSystemReady = status.backend && status.llm && status.vectorDB;
+
+  const handleOpenStatusPage = () => {
+    window.open(uptimeStatusPageUrl, "_blank", "noopener,noreferrer");
+  };
 
   return (
     <Card className="w-full">
@@ -60,18 +59,34 @@ export const SystemStatusPanel = () => {
       </CardHeader>
 
       <CardContent className="space-y-4 px-4 sm:px-6">
-        <div className="flex items-center justify-center">
+        <div className="flex items-center justify-center gap-2">
           {isSystemReady ? (
             <Badge className="bg-success text-success-foreground">
               <CheckCircle className="mr-1 h-3 w-3" />
-              Ready
+              System Ready
             </Badge>
           ) : (
             <Badge variant="destructive">
               <AlertCircle className="mr-1 h-3 w-3" />
-              Not Ready
+              System Unavailable
             </Badge>
           )}
+        </div>
+
+        <Button
+          variant="outline"
+          size="sm"
+          className="w-full"
+          onClick={handleOpenStatusPage}
+        >
+          <ExternalLink className="mr-2 h-4 w-4" />
+          View Uptime Status
+        </Button>
+
+        <Separator />
+
+        <div className="text-xs text-center font-medium text-muted-foreground">
+          Component Status
         </div>
 
         <div className="grid grid-cols-1 gap-2 text-xs">
@@ -135,29 +150,6 @@ export const SystemStatusPanel = () => {
               </Badge>
             )}
           </div>
-        </div>
-
-        <Separator />
-
-        <div className="space-y-2">
-          <label className="text-sm font-medium">AI Provider</label>
-          <Select value={aiProvider} onValueChange={setAiProvider}>
-            <SelectTrigger className="w-full h-9 text-sm">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="opensource">Open Source LLM</SelectItem>
-              <SelectItem value="openai">OpenAI GPT</SelectItem>
-              <SelectItem value="gemini">Google Gemini</SelectItem>
-            </SelectContent>
-          </Select>
-          <p className="text-xs text-muted-foreground">
-            {aiProvider === "openai"
-              ? "Using OpenAI GPT models"
-              : aiProvider === "gemini"
-              ? "Using Google Gemini models"
-              : "Using local Ollama models"}
-          </p>
         </div>
       </CardContent>
     </Card>
