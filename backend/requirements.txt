@@ -30,4 +30,4 @@ pydub>=0.25.1  # Audio processing
 google-generativeai==0.3.2
 
 # Security
-cryptography==41.0.7
+cryptography==44.0.1
