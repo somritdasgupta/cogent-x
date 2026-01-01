@@ -1,37 +1,42 @@
-# Backend config (generated at runtime)
-backend/config/
+# Development
+venv/
+node_modules/
+.git/
+.github/
 
-# Python cache
-**/__pycache__
-**/*.pyc
-**/*.pyo
-**/*.pyd
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
 .Python
-
-# Environment files
-.env
-.env.local
-
-# IDE
-.vscode
-.idea
-*.swp
-*.swo
-
-# Testing
-.pytest_cache
+.pytest_cache/
 .coverage
 
-# Node modules
-node_modules
+# Build
+dist/
+build/
+*.egg-info/
 
-# Build outputs
-dist
-build
+# Config
+.env
+.env.local
+backend/config/
+vector_db/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
 
 # Logs
 *.log
 
-# OS files
+# OS
 .DS_Store
 Thumbs.db
+
+# Docs
+README.md
+*.md

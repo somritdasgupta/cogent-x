@@ -3,30 +3,11 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet";
-import {
-  CheckCircle,
-  AlertCircle,
-  Upload,
-  Loader2,
-  FileText,
-  Settings,
-} from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { CheckCircle, AlertCircle, Upload, Loader2, FileText, Settings } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { buildApiUrl, API_ENDPOINTS, apiGet, apiPost } from "@/config/api";
+import { API_ENDPOINTS, apiGet, apiPost } from "@/config/api";
 
 interface SystemStatus {
   backend: boolean;
@@ -39,19 +20,11 @@ export const SystemDropdown = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [knowledgeBases, setKnowledgeBases] = useState<string[]>([]);
   const [isLoadingKB, setIsLoadingKB] = useState(true);
-  const [status, setStatus] = useState<SystemStatus>({
-    backend: false,
-    llm: false,
-    vectorDB: false,
-  });
-  const [aiProvider, setAiProvider] = useState(
-    () => localStorage.getItem("aiProvider") || "opensource"
-  );
+  const [status, setStatus] = useState<SystemStatus>({ backend: false, llm: false, vectorDB: false });
+  const [aiProvider, setAiProvider] = useState(() => localStorage.getItem("aiProvider") || "opensource");
   const { toast } = useToast();
 
-  useEffect(() => {
-    localStorage.setItem("aiProvider", aiProvider);
-  }, [aiProvider]);
+  useEffect(() => { localStorage.setItem("aiProvider", aiProvider); }, [aiProvider]);
 
   useEffect(() => {
     fetchKnowledgeBases();
@@ -68,7 +41,7 @@ export const SystemDropdown = () => {
         setStatus(data);
       }
     } catch (error) {
-      console.error("Health check failed:", error);
+      setStatus({ backend: false, llm: false, vectorDB: false });
     }
   };
 
@@ -81,7 +54,7 @@ export const SystemDropdown = () => {
         setKnowledgeBases(data.knowledge_bases || []);
       }
     } catch (error) {
-      console.error("Failed to fetch knowledge bases:", error);
+      setKnowledgeBases([]);
     } finally {
       setIsLoadingKB(false);
     }
@@ -89,40 +62,20 @@ export const SystemDropdown = () => {
 
   const handleIngestion = async (e: React.FormEvent) => {
     e.preventDefault();
-
     if (!url.trim()) {
-      toast({
-        title: "Error",
-        description: "Please enter a valid URL",
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: "Please enter a valid URL", variant: "destructive" });
       return;
     }
-
     setIsProcessing(true);
-
     try {
       const response = await apiPost(API_ENDPOINTS.INGEST, { url: url.trim() });
-
-      if (!response.ok) {
-        throw new Error("Ingestion failed");
-      }
-
+      if (!response.ok) throw new Error("Ingestion failed");
       const data = await response.json();
-
-      toast({
-        title: "Success",
-        description: data.message || "Document ingested successfully",
-      });
-
+      toast({ title: "Success", description: data.message || "Document ingested successfully" });
       setUrl("");
       fetchKnowledgeBases();
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to ingest document",
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: "Failed to ingest document", variant: "destructive" });
     } finally {
       setIsProcessing(false);
     }

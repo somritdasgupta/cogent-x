@@ -12,17 +12,31 @@ dist
 dist-ssr
 *.local
 
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+venv/
+env/
+ENV/
+.Python
+
 # Configuration and secrets
 backend/config/*
 !backend/config/.gitkeep
 .env
 .env.local
 
+# Vector DB
+vector_db/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
 .idea
 .DS_Store
+Thumbs.db
 *.suo
 *.ntvs*
 *.njsproj

@@ -9,6 +9,7 @@ services:
       - backend
     environment:
       - NODE_ENV=production
+      - VITE_API_BASE_URL=http://backend:8000
 
   backend:
     build:
@@ -19,8 +20,8 @@ services:
     environment:
       - PORT=8000
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://ollama:11434}
-      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama2}
-      - EMBEDDING_MODEL_NAME=${EMBEDDING_MODEL_NAME:-sentence-transformers/all-MiniLM-L6-v2}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3:8b}
+      - EMBEDDING_MODEL_NAME=${EMBEDDING_MODEL_NAME:-BAAI/bge-large-en-v1.5}
       - VECTOR_DB_DIRECTORY=${VECTOR_DB_DIRECTORY:-./vector_db}
       - API_HOST=${API_HOST:-0.0.0.0}
       - API_PORT=${API_PORT:-8000}
@@ -29,9 +30,6 @@ services:
     volumes:
       - ./vector_db:/app/vector_db
       - ./backend/config:/app/config
-      # Note: Session data is stored in-memory for privacy
-      # Sessions are isolated per user and expire after 24h
-      # To persist sessions across restarts, implement disk-backed SessionManager
     depends_on:
       - ollama
 

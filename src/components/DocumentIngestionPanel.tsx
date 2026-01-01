@@ -6,7 +6,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Upload, Loader2, FileText } from "lucide-react";
-import { buildApiUrl, API_ENDPOINTS, apiGet, apiPost } from "@/config/api";
+import { API_ENDPOINTS, apiGet, apiPost } from "@/config/api";
 
 export const DocumentIngestionPanel = () => {
   const [url, setUrl] = useState("");
@@ -15,9 +15,7 @@ export const DocumentIngestionPanel = () => {
   const [isLoadingKB, setIsLoadingKB] = useState(true);
   const { toast } = useToast();
 
-  useEffect(() => {
-    fetchKnowledgeBases();
-  }, []);
+  useEffect(() => { fetchKnowledgeBases(); }, []);
 
   const fetchKnowledgeBases = async () => {
     try {
@@ -25,22 +23,10 @@ export const DocumentIngestionPanel = () => {
       const response = await apiGet(API_ENDPOINTS.KNOWLEDGE_BASES);
       if (response.ok) {
         const data = await response.json();
-        console.log(
-          "[DocumentIngestion] Knowledge bases received:",
-          data.knowledge_bases
-        );
         setKnowledgeBases(data.knowledge_bases || []);
-      } else {
-        console.error(
-          "[DocumentIngestion] Failed to fetch knowledge bases:",
-          response.status
-        );
       }
     } catch (error) {
-      console.error(
-        "[DocumentIngestion] Failed to fetch knowledge bases:",
-        error
-      );
+      setKnowledgeBases([]);
     } finally {
       setIsLoadingKB(false);
     }
@@ -48,42 +34,20 @@ export const DocumentIngestionPanel = () => {
 
   const handleIngestion = async (e: React.FormEvent) => {
     e.preventDefault();
-
     if (!url.trim()) {
-      toast({
-        title: "Error",
-        description: "Please enter a valid URL",
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: "Please enter a valid URL", variant: "destructive" });
       return;
     }
-
     setIsProcessing(true);
-
     try {
       const response = await apiPost(API_ENDPOINTS.INGEST, { url: url.trim() });
-
-      if (!response.ok) {
-        throw new Error("Ingestion failed");
-      }
-
+      if (!response.ok) throw new Error("Ingestion failed");
       const data = await response.json();
-      console.log("[DocumentIngestion] Ingestion response:", data);
-
-      toast({
-        title: "Success",
-        description: data.message || "Document ingested successfully",
-      });
-
+      toast({ title: "Success", description: data.message || "Document ingested successfully" });
       setUrl("");
-      console.log("[DocumentIngestion] Refreshing knowledge bases...");
-      fetchKnowledgeBases(); // Refresh knowledge bases
+      fetchKnowledgeBases();
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to ingest document",
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: "Failed to ingest document", variant: "destructive" });
     } finally {
       setIsProcessing(false);
     }

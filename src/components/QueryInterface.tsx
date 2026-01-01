@@ -1,33 +1,40 @@
 import { useState, useEffect, useRef, FormEvent } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
+import { Drawer, DrawerContent, DrawerTrigger } from "@/components/ui/drawer";
 import { SourceModal } from "@/components/SourceModal";
+import { UnifiedSettingsPanel } from "@/components/UnifiedSettingsPanel";
 import {
   Loader2,
   Send,
-  MessageSquare,
-  ExternalLink,
-  Sparkles,
-  BookOpen,
-  Lightbulb,
-  CheckCircle2,
-  Mic,
-  Volume2,
-  VolumeX,
   Copy,
   Check,
+  Sparkles,
+  Plus,
+  Activity,
+  BookOpen,
+  Menu,
+  Heart,
+  Github,
+  Settings,
+  CheckCircle,
+  AlertCircle,
+  Upload,
+  Database,
+  Zap,
+  Shield,
+  FileText,
+  MessageSquare,
+  Trash2,
+  X,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import {
-  API_ENDPOINTS,
-  buildApiUrl,
-  apiPost,
-  apiRequest,
-  processApiResponse,
-} from "@/config/api";
+import { API_ENDPOINTS, apiPost, apiGet, getApiDocsUrl } from "@/config/api";
 import { useToast } from "@/hooks/use-toast";
+import { createConversationSession, getConversationSession } from "@/lib/session";
 
 interface SourceInfo {
   url: string;
@@ -42,330 +49,132 @@ interface Message {
   sources?: SourceInfo[];
 }
 
-interface ProcessingStep {
+interface ChatConversation {
   id: string;
-  label: string;
-  status: "pending" | "active" | "complete";
-  icon: React.ReactNode;
+  timestamp: string;
+  messages: Message[];
+  preview: string;
+  conversationId: string;
 }
 
 const QueryInterface = () => {
   const { toast } = useToast();
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [currentConversationId, setCurrentConversationId] = useState(() => {
+    const saved = localStorage.getItem("current_conversation_id");
+    return saved || crypto.randomUUID();
+  });
+  const [conversationTitle, setConversationTitle] = useState("New Conversation");
+  const [messages, setMessages] = useState<Message[]>(() => {
+    const saved = localStorage.getItem("chat_messages");
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [chatHistoryUpdate, setChatHistoryUpdate] = useState(0);
   const [currentQuery, setCurrentQuery] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
-  const [processingSteps, setProcessingSteps] = useState<ProcessingStep[]>([]);
-  const [isVoiceMode, setIsVoiceMode] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
-  const [isTranscribing, setIsTranscribing] = useState(false);
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
-  const [aiProvider, setAiProvider] = useState(
+  const [aiProvider] = useState(
     () => localStorage.getItem("aiProvider") || "opensource"
   );
   const [viewingSource, setViewingSource] = useState<{
     url: string;
     usedChunks: number[];
   } | null>(null);
+  const [isConfigured, setIsConfigured] = useState(false);
+  const [systemStatus, setSystemStatus] = useState({
+    backend: false,
+    llm: false,
+    vectorDB: false,
+  });
   const scrollRef = useRef<HTMLDivElement>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
-  const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const buttonModeRef = useRef<"send" | "mic">("send");
-  const [playingMessageId, setPlayingMessageId] = useState<string | null>(null);
-  const currentAudioRef = useRef<HTMLAudioElement | null>(null);
+  const [randomPrompts] = useState(() => {
+    const allPrompts = [
+      "Setup & environment requirements",
+      "Installation & deployment steps",
+      "Configuration reference",
+      "System architecture overview",
+      "API endpoints documentation",
+      "Authentication guide",
+      "Common errors & solutions",
+      "Database schema",
+      "Getting started guide",
+      "Best practices",
+      "Troubleshooting tips",
+      "Performance optimization",
+    ];
+    return [...allPrompts].sort(() => Math.random() - 0.5).slice(0, 3);
+  });
 
-  // Listen for provider changes from localStorage
+  // Save messages to localStorage whenever they change
   useEffect(() => {
-    const handleStorageChange = () => {
-      setAiProvider(localStorage.getItem("aiProvider") || "opensource");
-    };
-
-    window.addEventListener("storage", handleStorageChange);
-    // Also check periodically in case of same-window updates
-    const interval = setInterval(handleStorageChange, 1000);
-
-    return () => {
-      window.removeEventListener("storage", handleStorageChange);
-      clearInterval(interval);
-    };
-  }, []);
-
-  // Cleanup audio on unmount
-  useEffect(() => {
-    return () => {
-      if (currentAudioRef.current) {
-        try {
-          currentAudioRef.current.pause();
-          currentAudioRef.current.currentTime = 0;
-          currentAudioRef.current.removeAttribute("src");
-          currentAudioRef.current.load();
-          currentAudioRef.current = null;
-        } catch (e) {
-          console.log("Error cleaning up audio:", e);
-        }
-      }
-    };
-  }, []);
-
-  const quickPrompts = [
-    "Setup & environment requirements",
-    "Installation & deployment steps",
-    "Configuration reference with examples",
-    "System design & architecture overview",
-    "API endpoints with sample payloads",
-    "Authentication & session management",
-    "Common errors & resolution guide",
-    "Database schema & entity diagrams",
-    "Data models & object definitions",
-    "Version upgrades & migration steps",
-    "Dependencies & supported platforms",
-    "Integration patterns & connectors",
-    "Monitoring, logging & alerting setup",
-    "Performance optimization techniques",
-    "Security & compliance notes",
-    "Release updates & breaking changes",
-  ];
-
-  const startRecording = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: "audio/webm;codecs=opus",
-      });
-
-      mediaRecorderRef.current = mediaRecorder;
-      audioChunksRef.current = [];
-
-      mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) {
-          audioChunksRef.current.push(e.data);
-        }
-      };
-
-      mediaRecorder.onstop = async () => {
-        const audioBlob = new Blob(audioChunksRef.current, {
-          type: "audio/webm",
-        });
-        stream.getTracks().forEach((track) => track.stop());
-        await transcribeAudio(audioBlob);
-      };
-
-      mediaRecorder.start();
-      setIsRecording(true);
-      // Visual indicator shows recording state
-    } catch (error) {
-      console.error("Microphone error:", error);
-      toast({
-        title: "Microphone access denied",
-        description: "Please allow microphone access to use voice input",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const stopRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop();
-      setIsRecording(false);
-    }
-  };
-
-  const transcribeAudio = async (audioBlob: Blob) => {
-    setIsTranscribing(true);
-
-    try {
-      const formData = new FormData();
-      formData.append("file", audioBlob, "audio.webm");
-
-      const response = await apiRequest(API_ENDPOINTS.TRANSCRIBE, {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        const errorMessage = errorData.detail || "Transcription failed";
-        throw new Error(errorMessage);
-      }
-
-      const data = await response.json();
-
-      if (data.text) {
-        setCurrentQuery(data.text);
-        toast({
-          title: "Transcription complete!",
-          description: "Your speech has been converted to text",
-        });
-      } else {
-        throw new Error("No text returned from transcription");
-      }
-    } catch (error) {
-      console.error("Transcription error:", error);
-      const errorMessage =
-        error instanceof Error ? error.message : "Transcription failed";
-
-      toast({
-        title: "Transcription failed",
-        description: errorMessage.includes("not installed")
-          ? "WhisperX not installed on server. Please install it."
-          : errorMessage.includes("too large")
-          ? "Audio file is too large. Try recording a shorter message."
-          : "Could not transcribe audio. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsTranscribing(false);
-      setIsVoiceMode(false);
-      buttonModeRef.current = "send";
-    }
-  };
-
-  const speakText = async (text: string, messageId: string) => {
-    try {
-      // If clicking the same message that's playing, stop it
-      if (playingMessageId === messageId) {
-        if (currentAudioRef.current) {
-          // Force stop the audio
-          try {
-            currentAudioRef.current.pause();
-            currentAudioRef.current.currentTime = 0;
-            currentAudioRef.current.removeAttribute("src");
-            currentAudioRef.current.load(); // Reset the audio element
-          } catch (e) {
-            console.log("Error stopping audio:", e);
-          }
-          currentAudioRef.current = null;
-        }
-        setPlayingMessageId(null);
-        toast({
-          title: "⏹️ Stopped",
-          description: "Audio playback stopped",
-        });
-        return;
-      }
-
-      // Stop any other currently playing audio
-      if (currentAudioRef.current) {
-        try {
-          currentAudioRef.current.pause();
-          currentAudioRef.current.currentTime = 0;
-          currentAudioRef.current.removeAttribute("src");
-          currentAudioRef.current.load();
-        } catch (e) {
-          console.log("Error stopping previous audio:", e);
-        }
-        currentAudioRef.current = null;
-      }
-
-      setPlayingMessageId(messageId);
-
-      // Call TTS API
-      const response = await apiRequest(API_ENDPOINTS.TEXT_TO_SPEECH, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
-        body: `text=${encodeURIComponent(text)}`,
-      });
-
-      if (!response.ok) {
-        throw new Error("TTS request failed");
-      }
-
-      // Get audio blob
-      const audioBlob = await response.blob();
-      const audioUrl = URL.createObjectURL(audioBlob);
-
-      // Create & play audio
-      const audio = new Audio(audioUrl);
-      currentAudioRef.current = audio;
-
-      audio.onended = () => {
-        setPlayingMessageId(null);
-        currentAudioRef.current = null;
-        URL.revokeObjectURL(audioUrl);
-      };
-
-      audio.onerror = () => {
-        setPlayingMessageId(null);
-        currentAudioRef.current = null;
-        URL.revokeObjectURL(audioUrl);
-        toast({
-          title: "Playback failed",
-          description: "Could not play audio. Please try again.",
-          variant: "destructive",
-        });
-      };
-
-      await audio.play();
-      // Audio playing - no toast needed
-    } catch (error) {
-      console.error("TTS error:", error);
-      setPlayingMessageId(null);
-      toast({
-        title: "Text-to-speech failed",
-        description: "Could not convert text to speech. Please try again.",
-        variant: "destructive",
-      });
-    }
-  };
+    localStorage.setItem("chat_messages", JSON.stringify(messages));
+  }, [messages]);
 
   const copyToClipboard = async (content: string, messageId: string) => {
     try {
-      // Convert markdown to plain text by removing common markdown syntax
       const plainText = content
-        // Remove headers
         .replace(/^#{1,6}\s+/gm, "")
-        // Remove bold/italic
         .replace(/(\*\*|__)(.*?)\1/g, "$2")
         .replace(/(\*|_)(.*?)\1/g, "$2")
-        // Remove links [text](url) -> text
         .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
-        // Remove inline code
         .replace(/`([^`]+)`/g, "$1")
-        // Remove code blocks
         .replace(/```[\s\S]*?```/g, "")
-        // Remove blockquotes
         .replace(/^>\s+/gm, "")
-        // Clean up extra whitespace
         .replace(/\n{3,}/g, "\n\n")
         .trim();
-
       await navigator.clipboard.writeText(plainText);
       setCopiedMessageId(messageId);
-
-      toast({
-        title: "✓ Copied",
-      });
-
-      // Reset copied state after 2 seconds
-      setTimeout(() => {
-        setCopiedMessageId(null);
-      }, 2000);
-    } catch (error) {
-      console.error("Copy error:", error);
-      toast({
-        title: "Copy failed",
-        description: "Could not copy to clipboard. Please try again.",
-        variant: "destructive",
-      });
+      toast({ title: "Copied" });
+      setTimeout(() => setCopiedMessageId(null), 2000);
+    } catch {
+      toast({ title: "Copy failed", variant: "destructive" });
     }
   };
 
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollIntoView({ behavior: "smooth" });
-    }
+    scrollRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  useEffect(() => {
+    checkConfiguration();
+    checkStatus();
+    const interval = setInterval(checkStatus, 60000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const checkConfiguration = () => {
+    const hasProvider = localStorage.getItem("aiProvider");
+    setIsConfigured(!!hasProvider);
+  };
+
+  const checkStatus = async () => {
+    try {
+      const response = await apiGet(API_ENDPOINTS.HEALTH);
+      if (response.ok) {
+        const data = await response.json();
+        setSystemStatus(data);
+      }
+    } catch {
+      setSystemStatus({ backend: false, llm: false, vectorDB: false });
+    }
+  };
+
   const handleQuerySubmission = async (
-    e: FormEvent | React.MouseEvent | React.TouchEvent,
+    e: FormEvent | React.MouseEvent,
     promptText?: string
   ) => {
     e.preventDefault();
-
     const queryText = promptText || currentQuery;
     if (!queryText.trim() || isProcessing) return;
+
+    // Check if configured before allowing query
+    if (!isConfigured) {
+      toast({
+        title: "Setup Required",
+        description: "Please configure your AI provider in Settings first.",
+        variant: "destructive",
+      });
+      return;
+    }
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -373,115 +182,21 @@ const QueryInterface = () => {
       content: queryText,
       timestamp: new Date(),
     };
-
     setMessages((prev) => [...prev, userMessage]);
     setCurrentQuery("");
     setIsProcessing(true);
 
-    const steps: ProcessingStep[] = [
-      {
-        id: "1",
-        label: "Receiving query",
-        status: "complete",
-        icon: <CheckCircle2 className="h-4 w-4" />,
-      },
-      {
-        id: "2",
-        label: "Generating embeddings",
-        status: "active",
-        icon: <Loader2 className="h-4 w-4 animate-spin" />,
-      },
-      {
-        id: "3",
-        label: "Searching vector database",
-        status: "pending",
-        icon: <Loader2 className="h-4 w-4" />,
-      },
-      {
-        id: "4",
-        label: "Retrieving relevant chunks",
-        status: "pending",
-        icon: <Loader2 className="h-4 w-4" />,
-      },
-      {
-        id: "5",
-        label: "Generating response",
-        status: "pending",
-        icon: <Loader2 className="h-4 w-4" />,
-      },
-      {
-        id: "6",
-        label: "Formatting answer",
-        status: "pending",
-        icon: <Loader2 className="h-4 w-4" />,
-      },
-    ];
-    setProcessingSteps(steps);
+    if (messages.length === 0) {
+      const title = queryText.substring(0, 50) + (queryText.length > 50 ? "..." : "");
+      setConversationTitle(title);
+    }
 
     try {
-      setTimeout(() => {
-        setProcessingSteps((prev) =>
-          prev.map((s, i) =>
-            i === 1
-              ? {
-                  ...s,
-                  status: "complete",
-                  icon: <CheckCircle2 className="h-4 w-4" />,
-                }
-              : i === 2
-              ? {
-                  ...s,
-                  status: "active",
-                  icon: <Loader2 className="h-4 w-4 animate-spin" />,
-                }
-              : s
-          )
-        );
-      }, 300);
-
-      setTimeout(() => {
-        setProcessingSteps((prev) =>
-          prev.map((s, i) =>
-            i === 2
-              ? {
-                  ...s,
-                  status: "complete",
-                  icon: <CheckCircle2 className="h-4 w-4" />,
-                }
-              : i === 3
-              ? {
-                  ...s,
-                  status: "active",
-                  icon: <Loader2 className="h-4 w-4 animate-spin" />,
-                }
-              : s
-          )
-        );
-      }, 600);
-
       const response = await apiPost(API_ENDPOINTS.ASK, {
         query: queryText,
         provider: aiProvider,
+        conversation_id: currentConversationId,
       });
-
-      setProcessingSteps((prev) =>
-        prev.map((s, i) =>
-          i === 3
-            ? {
-                ...s,
-                status: "complete",
-                icon: <CheckCircle2 className="h-4 w-4" />,
-              }
-            : i === 4
-            ? {
-                ...s,
-                status: "active",
-                icon: <Loader2 className="h-4 w-4 animate-spin" />,
-              }
-            : s
-        )
-      );
-
       if (!response.ok) {
         const errorText = await response.text();
         let errorMessage = "Query failed";
@@ -493,37 +208,7 @@ const QueryInterface = () => {
         }
         throw new Error(errorMessage);
       }
-
       const data = await response.json();
-
-      setProcessingSteps((prev) =>
-        prev.map((s, i) =>
-          i === 4
-            ? {
-                ...s,
-                status: "complete",
-                icon: <CheckCircle2 className="h-4 w-4" />,
-              }
-            : i === 5
-            ? {
-                ...s,
-                status: "active",
-                icon: <Loader2 className="h-4 w-4 animate-spin" />,
-              }
-            : s
-        )
-      );
-
-      setTimeout(() => {
-        setProcessingSteps((prev) =>
-          prev.map((s) => ({
-            ...s,
-            status: "complete",
-            icon: <CheckCircle2 className="h-4 w-4" />,
-          }))
-        );
-      }, 200);
-
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
@@ -531,611 +216,569 @@ const QueryInterface = () => {
         timestamp: new Date(),
         sources: data.sources || [],
       };
-
       setMessages((prev) => [...prev, assistantMessage]);
     } catch (error) {
-      console.error("Query error:", error);
-
       let errorContent = "Unable to process query. ";
-
       if (error instanceof TypeError && error.message.includes("fetch")) {
-        errorContent +=
-          "Cannot connect to backend. Please check:\n\n" +
-          "1. Backend service is running\n" +
-          "2. VITE_API_BASE_URL is set correctly in environment variables\n" +
-          "3. Backend URL is accessible from your browser\n\n" +
-          `Current API base URL: ${
-            import.meta.env.VITE_API_BASE_URL || "using proxy"
-          }`;
+        errorContent += "Cannot connect to backend.";
       } else if (error instanceof Error) {
         errorContent += error.message;
-
-        // Add helpful context for common errors
-        if (error.message.includes("session")) {
-          errorContent +=
-            "\n\nTip: Try ingesting a document first to create a session.";
-        } else if (error.message.includes("API key")) {
-          errorContent +=
-            "\n\nPlease configure your API key in the settings panel.";
-        }
-      } else {
-        errorContent +=
-          "An unexpected error occurred. Check browser console for details.";
       }
-
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
         content: errorContent,
         timestamp: new Date(),
       };
-
       setMessages((prev) => [...prev, errorMessage]);
-
-      toast({
-        title: "Query Failed",
-        description:
-          error instanceof Error ? error.message : "Unknown error occurred",
-        variant: "destructive",
-      });
+      toast({ title: "Query Failed", variant: "destructive" });
     } finally {
       setIsProcessing(false);
-      setTimeout(() => setProcessingSteps([]), 500);
     }
   };
 
-  return (
-    <div className="flex flex-col h-full bg-gradient-to-br from-slate-50 via-white to-blue-50/30 dark:from-slate-950 dark:via-slate-900 dark:to-blue-950/20 relative overflow-hidden">
-      {/* Decorative Background Elements */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        {/* Large Floating Gradient Circles */}
-        <div
-          className="absolute top-20 left-10 w-80 h-80 bg-blue-400/5 dark:bg-blue-400/10 rounded-full blur-3xl animate-pulse"
-          style={{ animationDuration: "4s" }}
-        />
-        <div
-          className="absolute bottom-32 right-16 w-96 h-96 bg-purple-400/5 dark:bg-purple-400/10 rounded-full blur-3xl animate-pulse"
-          style={{ animationDuration: "5s", animationDelay: "1s" }}
-        />
-        <div
-          className="absolute top-1/3 right-1/4 w-64 h-64 bg-indigo-400/5 dark:bg-indigo-400/10 rounded-full blur-2xl animate-pulse"
-          style={{ animationDuration: "6s", animationDelay: "2s" }}
-        />
-        <div
-          className="absolute top-1/2 left-1/3 w-72 h-72 bg-pink-400/4 dark:bg-pink-400/8 rounded-full blur-3xl animate-pulse"
-          style={{ animationDuration: "7s", animationDelay: "1.5s" }}
-        />
+  const Sidebar = () => {
+    const isSystemReady =
+      systemStatus.backend && systemStatus.llm && systemStatus.vectorDB;
 
-        {/* Geometric Shapes - Squares & Rectangles */}
-        <div className="absolute top-40 right-20 w-24 h-24 border-2 border-blue-400/15 dark:border-blue-400/20 rounded-lg rotate-12 animate-float" />
-        <div
-          className="absolute top-32 left-1/4 w-16 h-16 border-2 border-purple-400/12 dark:border-purple-400/18 rounded-lg -rotate-45 animate-float"
-          style={{ animationDelay: "0.5s" }}
-        />
-        <div
-          className="absolute bottom-48 left-32 w-20 h-20 border-2 border-indigo-400/12 dark:border-indigo-400/18 rounded-lg rotate-6 animate-float"
-          style={{ animationDelay: "1s" }}
-        />
-        <div
-          className="absolute bottom-1/3 right-40 w-18 h-18 border-2 border-pink-400/15 dark:border-pink-400/20 rounded-lg -rotate-12 animate-float"
-          style={{ animationDelay: "3s" }}
-        />
-        <div
-          className="absolute top-2/3 right-1/3 w-14 h-14 border-2 border-blue-300/12 dark:border-blue-400/18 rounded-lg rotate-45 animate-float"
-          style={{ animationDelay: "2.5s" }}
-        />
-        <div
-          className="absolute top-1/4 left-1/2 w-20 h-20 border-2 border-purple-300/10 dark:border-purple-400/15 rounded-lg -rotate-30 animate-float"
-          style={{ animationDelay: "1.8s" }}
-        />
-
-        {/* Circles */}
-        <div
-          className="absolute bottom-48 left-1/4 w-24 h-24 border-2 border-purple-400/15 dark:border-purple-400/20 rounded-full animate-float"
-          style={{ animationDelay: "1s" }}
-        />
-        <div
-          className="absolute top-1/2 left-16 w-16 h-16 border-2 border-indigo-400/15 dark:border-indigo-400/20 rounded-full animate-float"
-          style={{ animationDelay: "2s" }}
-        />
-        <div
-          className="absolute top-1/3 right-32 w-20 h-20 border-2 border-pink-400/12 dark:border-pink-400/18 rounded-full animate-float"
-          style={{ animationDelay: "2.8s" }}
-        />
-        <div
-          className="absolute bottom-1/4 left-1/3 w-18 h-18 border-2 border-blue-400/12 dark:border-blue-400/18 rounded-full animate-float"
-          style={{ animationDelay: "3.2s" }}
-        />
-
-        {/* Triangles (rotated squares) */}
-        <div
-          className="absolute top-1/2 right-24 w-16 h-16 border-2 border-indigo-400/15 dark:border-indigo-400/20 rotate-45 animate-float"
-          style={{ animationDelay: "2s" }}
-        />
-        <div
-          className="absolute bottom-1/2 left-1/4 w-14 h-14 border-2 border-pink-400/12 dark:border-pink-400/18 rotate-45 animate-float"
-          style={{ animationDelay: "3.5s" }}
-        />
-        <div
-          className="absolute top-3/4 right-1/2 w-12 h-12 border-2 border-blue-400/15 dark:border-blue-400/20 rotate-45 animate-float"
-          style={{ animationDelay: "1.2s" }}
-        />
-
-        {/* Dots Patterns - More Scattered */}
-        <div className="absolute top-60 left-1/4 grid grid-cols-3 gap-3 opacity-15">
-          <div className="w-2.5 h-2.5 bg-blue-400 rounded-full" />
-          <div className="w-2.5 h-2.5 bg-purple-400 rounded-full" />
-          <div className="w-2.5 h-2.5 bg-indigo-400 rounded-full" />
+    return (
+      <div className="h-full flex flex-col bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-950">
+        {/* Quick Actions */}
+        <div className="p-4 space-y-2">
+          <Button 
+            variant="outline"
+            className="w-full justify-start gap-3 h-12 rounded-xl font-semibold border-2"
+            onClick={() => window.open("https://stats.uptimerobot.com/FxzeOvqyqU", "_blank")}
+          >
+            <Activity className="h-5 w-5" />
+            <span>Status</span>
+          </Button>
+          
+          <Button 
+            variant="outline"
+            className="w-full justify-start gap-3 h-12 rounded-xl font-semibold border-2"
+            onClick={() => window.open(getApiDocsUrl(), "_blank")}
+          >
+            <BookOpen className="h-5 w-5" />
+            <span>API Docs</span>
+          </Button>
+          
+          <UnifiedSettingsPanel onConfigChange={checkConfiguration} inSidebar>
+            <Button 
+              variant="outline"
+              className="w-full justify-start gap-3 h-12 rounded-xl font-semibold border-2"
+            >
+              <Settings className="h-5 w-5" />
+              <span className="flex-1 text-left">Settings</span>
+              {isSystemReady ? (
+                <CheckCircle className="h-5 w-5 text-green-500" />
+              ) : (
+                <AlertCircle className="h-5 w-5 text-red-500" />
+              )}
+            </Button>
+          </UnifiedSettingsPanel>
         </div>
-        <div className="absolute bottom-40 right-1/3 grid grid-cols-2 gap-2 opacity-15">
-          <div className="w-2 h-2 bg-pink-400 rounded-full" />
-          <div className="w-2 h-2 bg-blue-400 rounded-full" />
-        </div>
-        <div className="absolute top-1/3 left-1/3 grid grid-cols-4 gap-2 opacity-12">
-          <div className="w-1.5 h-1.5 bg-indigo-400 rounded-full" />
-          <div className="w-1.5 h-1.5 bg-purple-400 rounded-full" />
-          <div className="w-1.5 h-1.5 bg-blue-400 rounded-full" />
-          <div className="w-1.5 h-1.5 bg-pink-400 rounded-full" />
-        </div>
-        <div className="absolute bottom-1/3 left-1/2 grid grid-cols-3 gap-2.5 opacity-15">
-          <div className="w-2 h-2 bg-purple-400 rounded-full" />
-          <div className="w-2 h-2 bg-indigo-400 rounded-full" />
-          <div className="w-2 h-2 bg-blue-400 rounded-full" />
-        </div>
-
-        {/* Line Accents - More Throughout */}
-        <div className="absolute top-1/4 right-12 w-32 h-0.5 bg-gradient-to-r from-transparent via-blue-400/20 to-transparent rotate-45" />
-        <div className="absolute bottom-1/4 left-20 w-40 h-0.5 bg-gradient-to-r from-transparent via-purple-400/20 to-transparent -rotate-12" />
-        <div className="absolute top-1/2 left-1/4 w-28 h-0.5 bg-gradient-to-r from-transparent via-indigo-400/18 to-transparent rotate-30" />
-        <div className="absolute bottom-1/3 right-1/4 w-36 h-0.5 bg-gradient-to-r from-transparent via-pink-400/18 to-transparent -rotate-45" />
-        <div className="absolute top-3/4 right-1/3 w-24 h-0.5 bg-gradient-to-r from-transparent via-blue-400/15 to-transparent rotate-60" />
-
-        {/* Plus Signs */}
-        <div className="absolute top-1/4 left-16 opacity-10">
-          <div className="w-12 h-0.5 bg-blue-400 absolute top-1/2 left-0 transform -translate-y-1/2" />
-          <div className="h-12 w-0.5 bg-blue-400 absolute left-1/2 top-0 transform -translate-x-1/2" />
-        </div>
-        <div className="absolute bottom-1/3 right-20 opacity-10">
-          <div className="w-10 h-0.5 bg-purple-400 absolute top-1/2 left-0 transform -translate-y-1/2" />
-          <div className="h-10 w-0.5 bg-purple-400 absolute left-1/2 top-0 transform -translate-x-1/2" />
-        </div>
-
-        {/* Star-like elements (X shapes) */}
-        <div className="absolute top-2/3 left-1/3 w-8 h-8 opacity-12">
-          <div className="w-full h-0.5 bg-indigo-400 absolute top-1/2 left-0 transform -translate-y-1/2 rotate-45" />
-          <div className="w-full h-0.5 bg-indigo-400 absolute top-1/2 left-0 transform -translate-y-1/2 -rotate-45" />
-        </div>
-        <div className="absolute top-1/3 right-1/3 w-10 h-10 opacity-12">
-          <div className="w-full h-0.5 bg-pink-400 absolute top-1/2 left-0 transform -translate-y-1/2 rotate-45" />
-          <div className="w-full h-0.5 bg-pink-400 absolute top-1/2 left-0 transform -translate-y-1/2 -rotate-45" />
-        </div>
-      </div>
-      {messages.length === 0 ? (
-        <div className="flex items-center justify-center h-full text-center px-4 py-6 md:pt-16 lg:pt-20 overflow-y-auto">
-          <div className="max-w-5xl w-full space-y-6 animate-in fade-in duration-500">
-            {/* Header Section */}
-            <div className="space-y-3">
-              <h2 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent dark:from-blue-400 dark:via-purple-400 dark:to-pink-400">
-                Hi, let's get started.
-              </h2>
-              <p className="text-sm sm:text-base text-muted-foreground leading-relaxed max-w-2xl mx-auto">
-                Ask cogent-x anything about your ingested documents. I'll
-                provide detailed answers with source citations.
-              </p>
-            </div>
-
-            {/* Features Badges */}
-            <div className="flex flex-wrap gap-2 justify-center">
-              <Badge
-                variant="secondary"
-                className="text-xs sm:text-sm px-3 py-1.5 bg-gradient-to-r from-blue-500/10 to-blue-600/10 text-blue-700 dark:text-blue-300 border border-blue-500/30 shadow-sm"
-              >
-                <Sparkles className="h-3 w-3 sm:h-4 sm:w-4 mr-1.5" /> Semantic
-                Search
-              </Badge>
-              <Badge
-                variant="secondary"
-                className="text-xs sm:text-sm px-3 py-1.5 bg-gradient-to-r from-purple-500/10 to-purple-600/10 text-purple-700 dark:text-purple-300 border border-purple-500/30 shadow-sm"
-              >
-                <Lightbulb className="h-3 w-3 sm:h-4 sm:w-4 mr-1.5" />{" "}
-                RAG-Powered
-              </Badge>
-              <Badge
-                variant="secondary"
-                className="text-xs sm:text-sm px-3 py-1.5 bg-gradient-to-r from-pink-500/10 to-pink-600/10 text-pink-700 dark:text-pink-300 border border-pink-500/30 shadow-sm"
-              >
-                <BookOpen className="h-3 w-3 sm:h-4 sm:w-4 mr-1.5" /> Source
-                Citations
-              </Badge>
-            </div>
-
-            {/* Quick Prompts Section */}
-            <div className="space-y-3 pb-4">
-              <div className="flex items-center justify-center gap-2 text-xs sm:text-sm font-semibold text-muted-foreground">
-                <span className="text-lg sm:text-xl">💡</span>
-                <span>Quick Start Prompts</span>
+        
+        <Separator />
+        
+        {/* Chat History */}
+        <div className="flex-1 overflow-hidden min-h-0">
+          <ScrollArea className="h-full">
+            <div className="p-3 overflow-hidden">
+              <div className="flex items-center justify-between px-2 mb-2 gap-2">
+                <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex-shrink-0">Recent</p>
+                {(() => {
+                  const history = JSON.parse(localStorage.getItem("chat_history") || "[]");
+                  return history.length > 0 ? (
+                    <button
+                      onClick={() => {
+                        localStorage.removeItem("chat_history");
+                        localStorage.removeItem("chat_messages");
+                        setMessages([]);
+                        setChatHistoryUpdate(prev => prev + 1);
+                      }}
+                      className="text-[10px] font-semibold text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 transition-colors flex-shrink-0"
+                      title="Clear all chat history"
+                    >
+                      Clear All
+                    </button>
+                  ) : null;
+                })()}
               </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 max-w-6xl mx-auto">
-                {quickPrompts.map((prompt, index) => (
-                  <button
-                    key={index}
-                    onClick={(e) => {
-                      setCurrentQuery(prompt);
-                      handleQuerySubmission(e, prompt);
-                    }}
-                    className="group relative p-3 text-left rounded-lg bg-white dark:bg-slate-800/50 border-2 border-slate-200 dark:border-slate-700 hover:border-blue-400 dark:hover:border-blue-500 hover:shadow-lg hover:shadow-blue-500/20 transition-all duration-200 hover:-translate-y-0.5"
-                  >
-                    <p className="text-xs sm:text-sm font-medium text-slate-800 dark:text-slate-200 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors leading-snug">
-                      {prompt}
-                    </p>
-                  </button>
-                ))}
-              </div>
-
-              <p className="text-[10px] sm:text-xs text-muted-foreground/70 mt-2">
-                👆 Click any prompt to start exploring your knowledge base
-              </p>
-            </div>
-          </div>
-        </div>
-      ) : (
-        <ScrollArea className="flex-1 px-3 sm:px-4 md:px-6 lg:px-8 pb-40">
-          <div className="max-w-7xl mx-auto space-y-4 py-6">
-            {messages.map((message, index) => (
-              <div
-                key={message.id}
-                className={`flex ${
-                  message.role === "user" ? "justify-end" : "justify-start"
-                } animate-in slide-in-from-bottom-2 duration-300`}
-                style={{ animationDelay: `${index * 50}ms` }}
-              >
-                <div className="max-w-[85%] sm:max-w-[75%] lg:max-w-[70%]">
-                  <div
-                    className={`rounded-2xl px-5 sm:px-6 py-4 sm:py-4 ${
-                      message.role === "user"
-                        ? "bg-gradient-to-br from-blue-600 via-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/30 ring-1 ring-white/20"
-                        : "bg-gradient-to-br from-white to-slate-50/80 dark:from-slate-800 dark:to-slate-800/90 border-2 border-blue-400/60 dark:border-blue-500/60 shadow-[0_0_20px_rgba(59,130,246,0.3)] dark:shadow-[0_0_25px_rgba(59,130,246,0.4)]"
-                    }`}
-                  >
-                    {message.role === "assistant" ? (
-                      <div className="prose prose-sm sm:prose-base max-w-none dark:prose-invert prose-headings:font-semibold prose-p:leading-relaxed prose-pre:bg-muted/50">
-                        <ReactMarkdown
-                          remarkPlugins={[remarkGfm]}
-                          components={{
-                            p: ({ children }) => (
-                              <p className="mb-3 last:mb-0 text-[15px] sm:text-base leading-[1.7] text-slate-800 dark:text-slate-200 font-normal">
-                                {children}
-                              </p>
-                            ),
-                            ul: ({ children }) => (
-                              <ul className="mb-3 ml-5 space-y-2 text-[15px] sm:text-base">
-                                {children}
-                              </ul>
-                            ),
-                            ol: ({ children }) => (
-                              <ol className="mb-3 ml-5 space-y-2 text-[15px] sm:text-base">
-                                {children}
-                              </ol>
-                            ),
-                            li: ({ children }) => (
-                              <li className="text-[15px] sm:text-base text-slate-700 dark:text-slate-300 leading-[1.6]">
-                                {children}
-                              </li>
-                            ),
-                            h1: ({ children }) => (
-                              <h1 className="text-xl sm:text-2xl font-bold mb-3 text-slate-900 dark:text-slate-100">
-                                {children}
-                              </h1>
-                            ),
-                            h2: ({ children }) => (
-                              <h2 className="text-lg sm:text-xl font-semibold mb-2.5 text-slate-900 dark:text-slate-100">
-                                {children}
-                              </h2>
-                            ),
-                            h3: ({ children }) => (
-                              <h3 className="text-base sm:text-lg font-semibold mb-2 text-slate-800 dark:text-slate-200">
-                                {children}
-                              </h3>
-                            ),
-                            code: ({ children }) => (
-                              <code className="bg-muted px-1.5 py-0.5 rounded text-xs sm:text-sm font-mono border border-border/50">
-                                {children}
-                              </code>
-                            ),
-                            pre: ({ children }) => (
-                              <pre className="bg-muted/70 p-3 sm:p-4 rounded-lg overflow-x-auto text-xs sm:text-sm border border-border/50 my-3">
-                                {children}
-                              </pre>
-                            ),
-                            a: ({ href, children }) => (
-                              <a
-                                href={href}
-                                className="text-primary hover:text-primary/80 underline decoration-2 underline-offset-2 transition-colors"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                              >
-                                {children}
-                              </a>
-                            ),
-                            blockquote: ({ children }) => (
-                              <blockquote className="border-l-4 border-primary/30 pl-4 py-1 italic text-muted-foreground my-3">
-                                {children}
-                              </blockquote>
-                            ),
-                          }}
-                        >
-                          {message.content}
-                        </ReactMarkdown>
-                      </div>
-                    ) : (
-                      <p className="text-[15px] sm:text-base whitespace-pre-wrap break-words leading-[1.6] font-medium">
-                        {message.content}
-                      </p>
-                    )}
-                  </div>
-
-                  {message.sources && message.sources.length > 0 && (
-                    <div className="flex flex-wrap gap-2 mt-3.5">
-                      {message.sources.map((source, index) => (
+              {(() => {
+                const history = JSON.parse(localStorage.getItem("chat_history") || "[]");
+                return history.length > 0 ? (
+                  <div className="space-y-1 max-w-full">
+                    {history.slice(0, 10).map((conv: ChatConversation) => (
+                      <div 
+                        key={conv.id}
+                        className="group relative flex items-center gap-1 w-full max-w-full rounded-lg border-b border-border/50 pb-1"
+                      >
                         <button
-                          key={index}
-                          onClick={() =>
-                            setViewingSource({
-                              url: source.url,
-                              usedChunks: source.used_chunks.map(
-                                (c) => c.index
-                              ),
-                            })
-                          }
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-br from-blue-50 to-blue-100/80 dark:from-blue-950/40 dark:to-blue-900/30 hover:from-blue-100 hover:to-blue-200/80 dark:hover:from-blue-900/50 dark:hover:to-blue-800/40 text-blue-700 dark:text-blue-300 transition-all duration-200 border border-blue-200/60 dark:border-blue-800/50 shadow-sm hover:shadow-md text-xs font-medium"
+                          onClick={() => {
+                            // Only save current if it has messages and is different from the one being loaded
+                            if (messages.length > 0 && messages[0]?.id !== conv.messages[0]?.id) {
+                              const conversations = JSON.parse(localStorage.getItem("chat_history") || "[]");
+                              const currentPreview = messages.find(m => m.role === "user")?.content.substring(0, 50) || "New conversation";
+                              // Check if current chat already exists in history
+                              const exists = conversations.some((c: ChatConversation) => c.preview === currentPreview);
+                              if (!exists) {
+                                conversations.unshift({
+                                  id: Date.now().toString(),
+                                  timestamp: new Date().toISOString(),
+                                  messages: messages,
+                                  preview: currentPreview
+                                });
+                                localStorage.setItem("chat_history", JSON.stringify(conversations.slice(0, 50)));
+                              }
+                            }
+                            setMessages(conv.messages);
+                            localStorage.setItem("chat_messages", JSON.stringify(conv.messages));
+                          }}
+                          className="flex-1 min-w-0 text-left py-2.5 px-3 text-sm hover:bg-muted rounded-lg transition-colors"
                         >
-                          <ExternalLink className="h-3 w-3" />
-                          <span>
-                            Source {index + 1} ({source.used_chunks.length})
+                          <span className="block truncate">{conv.preview}</span>
+                          <span className="text-[10px] text-muted-foreground truncate block">
+                            {new Date(conv.timestamp).toLocaleDateString()}
                           </span>
                         </button>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Text-to-Speech & Copy buttons for assistant messages */}
-                  {message.role === "assistant" && (
-                    <div className="flex items-center gap-2 mt-3.5">
-                      <button
-                        onClick={() => speakText(message.content, message.id)}
-                        disabled={playingMessageId === message.id}
-                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 shadow-sm hover:shadow-md ${
-                          playingMessageId === message.id
-                            ? "bg-gradient-to-br from-green-100 to-green-50 dark:from-green-950/40 dark:to-green-900/30 text-green-700 dark:text-green-400 border border-green-300 dark:border-green-800"
-                            : "bg-gradient-to-br from-slate-100 to-slate-50 dark:from-slate-800 dark:to-slate-800/80 text-slate-700 dark:text-slate-300 hover:from-slate-200 hover:to-slate-100 dark:hover:from-slate-700 dark:hover:to-slate-700/80 border border-slate-300 dark:border-slate-700"
-                        }`}
-                      >
-                        {playingMessageId === message.id ? (
-                          <>
-                            <VolumeX className="h-3.5 w-3.5" />
-                            <span>Stop</span>
-                          </>
-                        ) : (
-                          <>
-                            <Volume2 className="h-3.5 w-3.5" />
-                            <span>Listen</span>
-                          </>
-                        )}
-                      </button>
-
-                      <button
-                        onClick={() =>
-                          copyToClipboard(message.content, message.id)
-                        }
-                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 shadow-sm hover:shadow-md ${
-                          copiedMessageId === message.id
-                            ? "bg-gradient-to-br from-green-100 to-green-50 dark:from-green-950/40 dark:to-green-900/30 text-green-700 dark:text-green-400 border border-green-300 dark:border-green-800"
-                            : "bg-gradient-to-br from-slate-100 to-slate-50 dark:from-slate-800 dark:to-slate-800/80 text-slate-700 dark:text-slate-300 hover:from-slate-200 hover:to-slate-100 dark:hover:from-slate-700 dark:hover:to-slate-700/80 border border-slate-300 dark:border-slate-700"
-                        }`}
-                      >
-                        {copiedMessageId === message.id ? (
-                          <>
-                            <Check className="h-3.5 w-3.5" />
-                            <span>Copied</span>
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="h-3.5 w-3.5" />
-                            <span>Copy</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  )}
-
-                  <p className="text-[10px] text-slate-500 dark:text-slate-500 mt-2.5 flex items-center gap-1.5 font-medium">
-                    <span className="inline-block w-1 h-1 rounded-full bg-slate-400 dark:bg-slate-600"></span>
-                    {message.timestamp.toLocaleTimeString([], {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </p>
-                </div>
-              </div>
-            ))}
-
-            {isProcessing && processingSteps.length > 0 && (
-              <div className="flex justify-start animate-in slide-in-from-bottom-4 duration-300">
-                <div className="max-w-[85%] sm:max-w-[75%] lg:max-w-[70%]">
-                  <div className="bg-white dark:bg-slate-800/90 border border-blue-200 dark:border-blue-800/50 rounded-2xl px-5 py-4 shadow-sm">
-                    <div className="space-y-3">
-                      <div className="flex items-center gap-2">
-                        <div className="flex items-center justify-center h-8 w-8 rounded-full bg-blue-100 dark:bg-blue-950/50">
-                          <Loader2 className="h-4 w-4 animate-spin text-blue-600 dark:text-blue-400" />
-                        </div>
-                        <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                          Processing
-                        </span>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const history = JSON.parse(localStorage.getItem("chat_history") || "[]");
+                            const updated = history.filter((c: ChatConversation) => c.id !== conv.id);
+                            localStorage.setItem("chat_history", JSON.stringify(updated));
+                            setChatHistoryUpdate(prev => prev + 1);
+                          }}
+                          className="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-red-100 dark:hover:bg-red-950 rounded-md transition-all flex-shrink-0"
+                          title="Delete conversation"
+                        >
+                          <Trash2 className="w-3.5 h-3.5 text-red-600 dark:text-red-400" />
+                        </button>
                       </div>
-                      <div className="space-y-2.5 pl-10">
-                        {processingSteps.map((step) => (
-                          <div
-                            key={step.id}
-                            className={`flex items-center gap-2.5 text-sm transition-all duration-300 ${
-                              step.status === "complete"
-                                ? "text-green-600 dark:text-green-400"
-                                : step.status === "active"
-                                ? "text-blue-600 dark:text-blue-400 font-medium"
-                                : "text-slate-400 dark:text-slate-600"
-                            }`}
-                          >
-                            <span className="flex-shrink-0">{step.icon}</span>
-                            <span className="flex-1">{step.label}</span>
-                            {step.status === "complete" && (
-                              <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
-                            )}
-                            {step.status === "active" && (
-                              <div className="flex gap-1">
-                                <span
-                                  className="w-1.5 h-1.5 bg-blue-600 rounded-full animate-bounce"
-                                  style={{ animationDelay: "0ms" }}
-                                ></span>
-                                <span
-                                  className="w-1.5 h-1.5 bg-blue-600 rounded-full animate-bounce"
-                                  style={{ animationDelay: "150ms" }}
-                                ></span>
-                                <span
-                                  className="w-1.5 h-1.5 bg-blue-600 rounded-full animate-bounce"
-                                  style={{ animationDelay: "300ms" }}
-                                ></span>
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
+                    ))}
                   </div>
-                </div>
-              </div>
-            )}
-
-            <div ref={scrollRef} />
-          </div>
-        </ScrollArea>
-      )}
-
-      <div className="fixed bottom-0 left-0 right-0 bg-gradient-to-t from-white via-white/95 to-white/90 dark:from-slate-950 dark:via-slate-950/95 dark:to-slate-950/90 backdrop-blur-xl border-t border-slate-200 dark:border-slate-800 shadow-[0_-2px_16px_rgba(0,0,0,0.08)] dark:shadow-[0_-2px_24px_rgba(0,0,0,0.4)] z-40 pb-10">
-        <div className="container mx-auto px-6 sm:px-8 md:px-12 lg:px-16 py-3">
-          <form onSubmit={handleQuerySubmission}>
-            <div className="max-w-7xl mx-auto flex items-center gap-3">
-              <div className="flex-1 relative neon-border-wrapper">
-                <Input
-                  value={currentQuery}
-                  onChange={(e) => setCurrentQuery(e.target.value)}
-                  placeholder={
-                    isRecording
-                      ? "🎤 Listening..."
-                      : isTranscribing
-                      ? "⏳ Transcribing..."
-                      : "Ask cogent-x anything about your documents..."
-                  }
-                  disabled={isProcessing || isRecording || isTranscribing}
-                  className="w-full text-base h-14 rounded-2xl border-3 border-blue-400 dark:border-blue-500 focus-visible:ring-4 focus-visible:ring-blue-500/40 focus-visible:border-blue-600 shadow-[0_2px_16px_rgba(59,130,246,0.2)] hover:shadow-[0_4px_24px_rgba(59,130,246,0.3)] dark:shadow-[0_2px_20px_rgba(59,130,246,0.3)] dark:hover:shadow-[0_4px_28px_rgba(59,130,246,0.4)] transition-all duration-200 bg-white dark:bg-slate-900 placeholder:text-slate-400 font-medium pr-4 relative z-10"
-                />
-              </div>
-
-              {/* Clean Unified Send/Mic Button */}
-              <div className="shrink-0">
-                <button
-                  type="button"
-                  disabled={isProcessing || isTranscribing}
-                  className="group relative h-14 w-14 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 overflow-hidden border-3 border-blue-400 dark:border-blue-500 hover:border-blue-500 dark:hover:border-blue-400"
-                  onClick={(e) => {
-                    if (buttonModeRef.current === "send") {
-                      if (currentQuery.trim()) {
-                        handleQuerySubmission(e);
-                      } else {
-                        buttonModeRef.current = "mic";
-                        setIsVoiceMode(true);
-                        startRecording();
-                      }
-                    } else {
-                      stopRecording();
-                    }
-                  }}
-                  onTouchStart={() => {
-                    if (
-                      buttonModeRef.current === "send" &&
-                      !currentQuery.trim()
-                    ) {
-                      longPressTimerRef.current = setTimeout(() => {
-                        buttonModeRef.current = "mic";
-                        setIsVoiceMode(true);
-                        startRecording();
-                      }, 200);
-                    }
-                  }}
-                  onTouchEnd={(e) => {
-                    if (longPressTimerRef.current) {
-                      clearTimeout(longPressTimerRef.current);
-                    }
-                    if (isRecording) {
-                      stopRecording();
-                      setTimeout(() => {
-                        if (currentQuery.trim()) {
-                          const evt = new Event("submit", {
-                            bubbles: true,
-                            cancelable: true,
-                          }) as unknown as FormEvent;
-                          handleQuerySubmission(evt);
-                        }
-                      }, 1000);
-                    } else if (
-                      buttonModeRef.current === "send" &&
-                      currentQuery.trim()
-                    ) {
-                      handleQuerySubmission(e);
-                    }
-                  }}
-                  onMouseLeave={() => {
-                    if (longPressTimerRef.current) {
-                      clearTimeout(longPressTimerRef.current);
-                    }
-                  }}
-                >
-                  {/* Background Gradient */}
-                  <div
-                    className={`absolute inset-0 transition-all duration-300 rounded-2xl ${
-                      isRecording
-                        ? "bg-gradient-to-br from-red-500 to-red-600"
-                        : currentQuery.trim()
-                        ? "bg-gradient-to-br from-blue-600 to-indigo-600 group-hover:from-blue-700 group-hover:to-indigo-700"
-                        : "bg-gradient-to-br from-slate-700 to-slate-800 group-hover:from-blue-600 group-hover:to-indigo-600"
-                    }`}
-                  />
-
-                  {/* Icon Display */}
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    {isRecording ? (
-                      <div className="relative">
-                        <Mic className="h-6 w-6 text-white animate-pulse" />
-                        <div className="absolute -top-1 -right-1 h-2.5 w-2.5 bg-white rounded-full animate-ping" />
-                      </div>
-                    ) : currentQuery.trim() ? (
-                      <Send className="h-5 w-5 text-white transition-transform group-hover:scale-110 group-hover:translate-x-0.5" />
-                    ) : (
-                      <Mic className="h-5 w-5 text-white transition-transform group-hover:scale-110" />
-                    )}
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+                    <div className="w-12 h-12 rounded-xl bg-muted flex items-center justify-center mb-2">
+                      <MessageSquare className="w-6 h-6 text-muted-foreground" />
+                    </div>
+                    <p className="text-xs text-muted-foreground">No conversations yet</p>
                   </div>
-                </button>
-              </div>
+                );
+              })()}
             </div>
-          </form>
+          </ScrollArea>
+        </div>
+        
+        <Separator />
+        
+        {/* New Chat Button */}
+        <div className="p-4">
+          <Button 
+            onClick={() => {
+              if (messages.length > 0) {
+                const conversations = JSON.parse(localStorage.getItem("chat_history") || "[]");
+                conversations.unshift({
+                  id: currentConversationId,
+                  timestamp: new Date().toISOString(),
+                  messages: messages,
+                  preview: messages.find(m => m.role === "user")?.content.substring(0, 50) || "New conversation",
+                  conversationId: currentConversationId
+                });
+                localStorage.setItem("chat_history", JSON.stringify(conversations.slice(0, 50)));
+                setChatHistoryUpdate(prev => prev + 1);
+              }
+              localStorage.removeItem("chat_messages");
+              const newConvId = crypto.randomUUID();
+              localStorage.setItem("current_conversation_id", newConvId);
+              setCurrentConversationId(newConvId);
+              setMessages([]);
+              setConversationTitle("New Conversation");
+            }}
+            className="w-full justify-center gap-2 h-12 rounded-xl font-bold text-base bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 shadow-lg"
+          >
+            <Plus className="h-5 w-5" />
+            New Chat
+          </Button>
         </div>
       </div>
+    );
+  };
 
-      {/* Source Modal */}
-      <SourceModal
-        url={viewingSource?.url || null}
-        usedChunks={viewingSource?.usedChunks || []}
-        onClose={() => setViewingSource(null)}
-      />
+  return (
+    <div className="flex h-screen flex-col">
+      <div className="flex flex-1 min-h-0">
+        {/* Desktop Sidebar */}
+        <div className="hidden md:flex md:flex-col w-64 border-r">
+          <Sidebar />
+        </div>
+
+        {/* Mobile Sidebar */}
+        <Drawer>
+          <DrawerTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="md:hidden fixed top-3 left-3 z-50"
+            >
+              <Menu className="h-5 w-5" />
+            </Button>
+          </DrawerTrigger>
+          <DrawerContent className="h-[85vh]">
+            <Sidebar />
+          </DrawerContent>
+        </Drawer>
+
+        {/* Main Content */}
+        <div className="flex-1 flex flex-col min-w-0">
+          {!isConfigured ? (
+            <div className="flex-1 flex flex-col items-center justify-center p-6">
+              <div className="w-full max-w-3xl space-y-8 text-center pb-32">
+                <div className="flex flex-col items-center gap-4">
+                  <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shadow-lg">
+                    <Upload className="w-10 h-10 text-white" />
+                  </div>
+                  <div>
+                    <h1 className="text-4xl font-bold bg-gradient-to-r from-violet-600 to-purple-600 bg-clip-text text-transparent mb-2">
+                      Welcome to cogent-x
+                    </h1>
+                    <p className="text-lg text-muted-foreground">
+                      Private AI knowledge base for documentation
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-left">
+                  <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950/30 dark:to-blue-900/30 rounded-xl p-5 border-2 border-blue-200 dark:border-blue-800">
+                    <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center mb-3 font-bold">
+                      1
+                    </div>
+                    <h3 className="font-bold text-lg mb-2">Configure AI</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Choose Ollama (free, local), OpenAI, or Gemini
+                    </p>
+                  </div>
+                  <div className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-950/30 dark:to-purple-900/30 rounded-xl p-5 border-2 border-purple-200 dark:border-purple-800">
+                    <div className="w-10 h-10 rounded-full bg-purple-600 text-white flex items-center justify-center mb-3 font-bold">
+                      2
+                    </div>
+                    <h3 className="font-bold text-lg mb-2">Ingest Docs</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Add your documentation URLs to build knowledge base
+                    </p>
+                  </div>
+                  <div className="bg-gradient-to-br from-pink-50 to-pink-100 dark:from-pink-950/30 dark:to-pink-900/30 rounded-xl p-5 border-2 border-pink-200 dark:border-pink-800">
+                    <div className="w-10 h-10 rounded-full bg-pink-600 text-white flex items-center justify-center mb-3 font-bold">
+                      3
+                    </div>
+                    <h3 className="font-bold text-lg mb-2">Ask Questions</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Get AI answers with source citations
+                    </p>
+                  </div>
+                </div>
+
+                <div className="bg-muted/50 rounded-2xl p-6 space-y-4">
+                  <div className="flex items-center gap-2 justify-center">
+                    <Sparkles className="h-5 w-5 text-violet-600" />
+                    <h2 className="text-xl font-bold">How It Works</h2>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-left text-sm">
+                    <div className="flex gap-2">
+                      <Database className="h-5 w-5 text-violet-600 flex-shrink-0" />
+                      <div>
+                        <strong>RAG-Powered:</strong> Documents are chunked,
+                        embedded, and stored in vector database
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <Zap className="h-5 w-5 text-violet-600 flex-shrink-0" />
+                      <div>
+                        <strong>Semantic Search:</strong> Finds most relevant
+                        chunks for your query
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <Shield className="h-5 w-5 text-violet-600 flex-shrink-0" />
+                      <div>
+                        <strong>Private & Secure:</strong> Your data stays on
+                        your infrastructure
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <FileText className="h-5 w-5 text-violet-600 flex-shrink-0" />
+                      <div>
+                        <strong>Source Citations:</strong> Every answer includes
+                        document references
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <UnifiedSettingsPanel onConfigChange={checkConfiguration}>
+                  <Button
+                    size="lg"
+                    className="bg-violet-600 hover:bg-violet-700 rounded-xl font-semibold text-base px-8 py-6"
+                  >
+                    <Settings className="h-5 w-5 mr-2" />
+                    Get Started - Open Settings
+                  </Button>
+                </UnifiedSettingsPanel>
+
+                <p className="text-xs text-muted-foreground">
+                  💡 Tip: Start with Ollama for free local AI, or use
+                  OpenAI/Gemini for best quality
+                </p>
+              </div>
+            </div>
+          ) : messages.length === 0 ? (
+            <div className="flex-1 flex flex-col items-center justify-center p-6">
+              <div className="w-full max-w-2xl space-y-8 pb-32">
+                <div className="flex flex-col items-center space-y-8">
+                  <div className="flex items-center gap-4">
+                    <h1 className="text-5xl font-black bg-gradient-to-r from-violet-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
+                      cogent-x
+                    </h1>
+                  </div>
+                  <p className="text-xl font-semibold text-center">
+                    How can I assist you today?
+                  </p>
+                </div>
+
+                {/* Setup Status Banner */}
+                <div className="bg-muted/30 border border-border rounded-xl p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Setup Progress</p>
+                    <span className="text-xs text-muted-foreground">1/2</span>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2.5">
+                      {systemStatus.backend && systemStatus.llm ? (
+                        <div className="w-5 h-5 rounded-full bg-green-500 flex items-center justify-center flex-shrink-0">
+                          <Check className="w-3 h-3 text-white" />
+                        </div>
+                      ) : (
+                        <div className="w-5 h-5 rounded-full border-2 border-muted-foreground flex-shrink-0" />
+                      )}
+                      <span className="text-sm">Configure AI Provider</span>
+                    </div>
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-5 h-5 rounded-full border-2 border-muted-foreground flex-shrink-0" />
+                      <span className="text-sm">Ingest Documentation</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="w-full">
+                  <p className="text-xs font-semibold text-muted-foreground mb-3 text-center">
+                    QUICK START PROMPTS
+                  </p>
+                  <div className="grid grid-cols-1 gap-3">
+                    {randomPrompts.map((prompt) => (
+                      <button
+                        key={prompt}
+                        onClick={(e) => handleQuerySubmission(e, prompt)}
+                        className="group text-left px-5 py-4 rounded-2xl border-2 border-violet-200 dark:border-violet-800 bg-gradient-to-br from-violet-50 to-purple-50 dark:from-violet-950/30 dark:to-purple-950/30 hover:border-violet-400 dark:hover:border-violet-600 hover:shadow-lg hover:shadow-violet-200/50 dark:hover:shadow-violet-900/30 transition-all duration-200 hover:-translate-y-0.5"
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="w-8 h-8 rounded-lg bg-violet-600 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
+                            <Sparkles className="w-4 h-4 text-white" />
+                          </div>
+                          <span className="text-sm font-semibold text-foreground leading-relaxed pt-1">
+                            {prompt}
+                          </span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <>
+              {messages.length > 0 && (
+                <div className="fixed top-4 left-1/2 -translate-x-1/2 z-10 px-4 py-2 bg-background/95 backdrop-blur-sm border border-border rounded-full shadow-lg max-w-xs md:max-w-md">
+                  <p className="text-sm font-medium text-muted-foreground truncate text-center">{conversationTitle}</p>
+                </div>
+              )}
+              <ScrollArea className="flex-1">
+              <div className="w-full max-w-5xl mx-auto px-4 md:px-8 lg:px-12 pt-20 py-6 space-y-6 pb-24 md:pb-40">
+                {messages.map((message) => (
+                  <div key={message.id}>
+                    {message.role === "user" ? (
+                      <div className="flex justify-end mb-4">
+                        <div className="relative max-w-[85%] md:max-w-[70%] lg:max-w-[60%]">
+                          <div className="bg-gradient-to-br from-violet-600 to-purple-600 text-white rounded-2xl rounded-tr-sm px-4 py-3 shadow-md">
+                            <p className="text-[15px] leading-relaxed whitespace-pre-wrap break-words">
+                              {message.content}
+                            </p>
+                          </div>
+                          <span className="text-[10px] text-muted-foreground mt-1 block text-right">
+                            {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex gap-3 mb-4">
+                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center flex-shrink-0 shadow-md">
+                          <Sparkles className="w-4 h-4 text-white" />
+                        </div>
+                        <div className="flex-1 max-w-[85%] md:max-w-[70%] lg:max-w-[60%]">
+                          <div className="bg-muted/50 rounded-2xl rounded-tl-sm px-4 py-3 shadow-sm">
+                            <div className="prose prose-sm dark:prose-invert max-w-none prose-p:text-[15px] prose-p:leading-relaxed prose-p:my-1.5 prose-headings:font-bold prose-headings:mt-3 prose-headings:mb-1.5 prose-strong:font-semibold prose-code:bg-background prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-sm prose-pre:bg-background prose-pre:border prose-pre:border-border prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5">
+                              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                {message.content}
+                              </ReactMarkdown>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 mt-2">
+                            <span className="text-[10px] text-muted-foreground">
+                              {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                            {message.sources && message.sources.length > 0 && (
+                              <div className="flex gap-1.5">
+                                {message.sources.map((source, idx) => (
+                                  <button
+                                    key={idx}
+                                    onClick={() =>
+                                      setViewingSource({
+                                        url: source.url,
+                                        usedChunks: source.used_chunks.map(
+                                          (c) => c.index
+                                        ),
+                                      })
+                                    }
+                                    className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-1 rounded-md bg-violet-100 dark:bg-violet-950 text-violet-700 dark:text-violet-300 hover:bg-violet-200 dark:hover:bg-violet-900 transition-colors"
+                                  >
+                                    <FileText className="w-2.5 h-2.5" />
+                                    {idx + 1}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() =>
+                                copyToClipboard(message.content, message.id)
+                              }
+                              className="h-6 px-2 text-[10px] hover:bg-muted"
+                            >
+                              {copiedMessageId === message.id ? (
+                                <Check className="h-3 w-3 mr-1" />
+                              ) : (
+                                <Copy className="h-3 w-3 mr-1" />
+                              )}
+                              {copiedMessageId === message.id ? "Copied" : "Copy"}
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+                {isProcessing && (
+                  <div className="flex gap-3 mb-4">
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shadow-md">
+                      <Loader2 className="w-4 h-4 text-white animate-spin" />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm text-muted-foreground font-medium">Thinking</p>
+                      <div className="flex gap-1">
+                        <span className="w-1.5 h-1.5 bg-violet-600 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+                        <span className="w-1.5 h-1.5 bg-violet-600 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+                        <span className="w-1.5 h-1.5 bg-violet-600 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+                      </div>
+                    </div>
+                  </div>
+                )}
+                <div ref={scrollRef} />
+              </div>
+            </ScrollArea>
+            </>
+          )}
+
+          {/* Floating Bottom Input - Only show if configured */}
+          {isConfigured && (
+            <div className="fixed md:static bottom-0 left-0 right-0 p-4 bg-background/95 backdrop-blur-xl border-t md:border-t-0">
+              <div className="w-full max-w-5xl mx-auto px-0 md:px-8 lg:px-12">
+                <form onSubmit={handleQuerySubmission} className="relative">
+                  <div className="relative">
+                    <div className="absolute -inset-[2px] bg-gradient-to-r from-violet-400 via-purple-400 to-pink-400 rounded-2xl opacity-75 blur-md" />
+                    <div className="absolute -inset-[2px] rounded-2xl overflow-hidden">
+                      <div
+                        className="absolute inset-0 bg-gradient-to-r from-violet-400 via-purple-400 to-pink-400 animate-[spin_3s_linear_infinite] opacity-60"
+                        style={{ backgroundSize: "200% 200%" }}
+                      />
+                    </div>
+                    <div className="relative bg-background border border-border rounded-2xl shadow-lg">
+                      <Input
+                        value={currentQuery}
+                        onChange={(e) => setCurrentQuery(e.target.value)}
+                        placeholder="Ask me anything..."
+                        disabled={isProcessing}
+                        className="h-14 pr-14 rounded-2xl border-0 bg-transparent text-[15px] font-medium placeholder:font-normal"
+                      />
+                      <div className="absolute right-2 top-2">
+                        <Button
+                          type="submit"
+                          disabled={isProcessing || !currentQuery.trim()}
+                          size="icon"
+                          className="h-10 w-10 bg-violet-600 hover:bg-violet-700 rounded-xl"
+                        >
+                          {isProcessing ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Send className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <SourceModal
+          url={viewingSource?.url || null}
+          usedChunks={viewingSource?.usedChunks || []}
+          onClose={() => setViewingSource(null)}
+        />
+      </div>
+
+      {/* Global Footer */}
+      <div className="h-8 bg-slate-900 dark:bg-slate-950 border-t border-slate-800 flex items-center justify-center flex-shrink-0">
+        <div className="text-[10px] text-sky-400 flex items-center gap-3">
+          <div className="flex items-center gap-1">
+            <span>Made with</span>
+            <Heart className="w-2.5 h-2.5 fill-red-500 text-red-500" />
+            <span>by</span>
+            <a
+              href="https://github.com/somritdasgupta"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-semibold hover:text-sky-300 transition-colors"
+            >
+              @somritdasgupta
+            </a>
+          </div>
+          <span className="text-slate-600">•</span>
+          <div className="flex items-center gap-1">
+            <Github className="w-2.5 h-2.5" />
+            <a
+              href="https://github.com/somritdasgupta/cogent-x"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-semibold hover:text-sky-300 transition-colors"
+            >
+              Open Source
+            </a>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };

@@ -98,7 +98,13 @@ interface SourceChunk {
   index: number;
 }
 
-export const UnifiedSettingsPanel = () => {
+interface UnifiedSettingsPanelProps {
+  children?: React.ReactNode;
+  onConfigChange?: () => void;
+  inSidebar?: boolean;
+}
+
+export const UnifiedSettingsPanel = ({ children, onConfigChange, inSidebar }: UnifiedSettingsPanelProps = {}) => {
   // Configuration state
   const [config, setConfig] = useState<Configuration>({
     ollama_base_url: "http://localhost:11434",
@@ -244,13 +250,6 @@ export const UnifiedSettingsPanel = () => {
     fetchKnowledgeBases();
     fetchDatabaseStats();
     fetchSources();
-
-    // Polling for status (every 60 seconds)
-    const interval = setInterval(() => {
-      checkStatus();
-    }, 60000);
-
-    return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Only run once on mount
 
@@ -274,10 +273,6 @@ export const UnifiedSettingsPanel = () => {
         title: "Configuration Saved",
         description: "Settings updated successfully",
       });
-
-      // Refresh status immediately after saving configuration
-      // No delay needed - check happens instantly
-      checkStatus();
     } catch (error) {
       setSaveStatus("error");
       const errorMessage =
@@ -310,9 +305,11 @@ export const UnifiedSettingsPanel = () => {
     setIsProcessing(true);
 
     try {
+      const conversationId = localStorage.getItem("current_conversation_id") || "default";
       const response = await apiPost(API_ENDPOINTS.INGEST, {
         url: url.trim(),
         provider: aiProvider,
+        conversation_id: conversationId,
       });
 
       if (!response.ok) {
@@ -331,6 +328,7 @@ export const UnifiedSettingsPanel = () => {
       fetchKnowledgeBases();
       fetchDatabaseStats();
       fetchSources();
+      checkStatus(); // Update setup progress
     } catch (error) {
       toast({
         title: "Error",
@@ -446,9 +444,9 @@ export const UnifiedSettingsPanel = () => {
     }
   };
 
-  const updateConfig = (key: keyof Configuration, value: string | number) => {
+  const updateConfig = useCallback((key: keyof Configuration, value: string | number) => {
     setConfig((prev) => ({ ...prev, [key]: value }));
-  };
+  }, []);
 
   const maskApiKey = (key: string) => {
     if (!key || key.length < 8) return key;
@@ -465,19 +463,21 @@ export const UnifiedSettingsPanel = () => {
     <>
       <Sheet>
         <SheetTrigger asChild>
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-2 border-slate-600 bg-slate-900 hover:bg-slate-800 hover:text-blue-200 text-slate-300"
-          >
-            <Settings className="h-4 w-4" />
-            <span className="hidden sm:inline">Settings</span>
-            {isSystemReady ? (
-              <CheckCircle className="h-3.5 w-3.5 text-green-500" />
-            ) : (
-              <AlertCircle className="h-3.5 w-3.5 text-red-500" />
-            )}
-          </Button>
+          {children || (
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2 border-slate-600 bg-slate-900 hover:bg-slate-800 hover:text-blue-200 text-slate-300"
+            >
+              <Settings className="h-4 w-4" />
+              <span className="hidden sm:inline">Settings</span>
+              {isSystemReady ? (
+                <CheckCircle className="h-3.5 w-3.5 text-green-500" />
+              ) : (
+                <AlertCircle className="h-3.5 w-3.5 text-red-500" />
+              )}
+            </Button>
+          )}
         </SheetTrigger>
         <SheetContent className="w-full sm:max-w-2xl overflow-y-auto">
           <SheetHeader className="space-y-1">
@@ -488,29 +488,33 @@ export const UnifiedSettingsPanel = () => {
           </SheetHeader>
 
           {isLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="animate-spin h-8 w-8 text-primary" />
+            <div className="flex flex-col items-center justify-center py-16 space-y-4">
+              <div className="relative w-16 h-16">
+                <div className="absolute inset-0 rounded-full bg-gradient-to-r from-violet-500 via-purple-500 to-pink-500 opacity-75 blur-md animate-pulse" />
+                <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-violet-600 border-r-purple-600 animate-spin" />
+              </div>
+              <p className="text-sm font-medium text-muted-foreground">Loading configuration...</p>
             </div>
           ) : (
-            <Tabs defaultValue="system" className="mt-6">
+            <Tabs defaultValue="providers" className="mt-6">
               <TabsList className="grid w-full grid-cols-3 mb-6 h-auto p-1">
                 <TabsTrigger
-                  value="system"
+                  value="providers"
                   className="text-xs sm:text-sm py-2 gap-1.5"
                 >
-                  <Monitor className="h-4 w-4" /> System Config
+                  <Bot className="h-4 w-4" /> 1. AI Provider
                 </TabsTrigger>
                 <TabsTrigger
                   value="rag"
                   className="text-xs sm:text-sm py-2 gap-1.5"
                 >
-                  <Settings className="h-4 w-4" /> RAG Config
+                  <Settings className="h-4 w-4" /> 2. RAG Config
                 </TabsTrigger>
                 <TabsTrigger
-                  value="providers"
+                  value="system"
                   className="text-xs sm:text-sm py-2 gap-1.5"
                 >
-                  <Bot className="h-4 w-4" /> LLM Provider
+                  <Monitor className="h-4 w-4" /> 3. Ingestion
                 </TabsTrigger>
               </TabsList>
 

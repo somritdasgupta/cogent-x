@@ -12,18 +12,8 @@ interface SystemStatus {
   vectorDB: boolean;
 }
 
-export const SystemStatusPanel = ({
-  onConfigChange,
-}: {
-  onConfigChange?: number;
-}) => {
-  const [status, setStatus] = useState<SystemStatus>({
-    backend: false,
-    llm: false,
-    vectorDB: false,
-  });
-
-  // Uptime Robot status page URL - only show button if configured
+export const SystemStatusPanel = ({ onConfigChange }: { onConfigChange?: number }) => {
+  const [status, setStatus] = useState<SystemStatus>({ backend: false, llm: false, vectorDB: false });
   const uptimeStatusPageUrl = import.meta.env.VITE_UPTIME_STATUS_PAGE;
 
   const checkStatus = async () => {
@@ -34,26 +24,18 @@ export const SystemStatusPanel = ({
         setStatus(data);
       }
     } catch (error) {
-      console.error("Health check failed:", error);
-      setStatus({
-        backend: false,
-        llm: false,
-        vectorDB: false,
-      });
+      setStatus({ backend: false, llm: false, vectorDB: false });
     }
   };
 
   useEffect(() => {
     checkStatus();
-    const interval = setInterval(checkStatus, 30000); // Check every 30s
+    const interval = setInterval(checkStatus, 30000);
     return () => clearInterval(interval);
   }, []);
 
-  // Re-check status immediately when config changes
   useEffect(() => {
-    if (onConfigChange) {
-      checkStatus();
-    }
+    if (onConfigChange) checkStatus();
   }, [onConfigChange]);
 
   const isSystemReady = status.backend && status.llm && status.vectorDB;

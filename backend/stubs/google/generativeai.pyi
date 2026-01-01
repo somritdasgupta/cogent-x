@@ -1,0 +1,13 @@
+from typing import Any, Dict, List, Optional
+
+def configure(api_key: str) -> None: ...
+
+class GenerativeModel:
+    def __init__(self, model_name: str) -> None: ...
+    def generate_content(self, prompt: str) -> Any: ...
+
+def embed_content(
+    model: str,
+    content: str,
+    task_type: str = "retrieval_document"
+) -> Dict[str, List[float]]: ...

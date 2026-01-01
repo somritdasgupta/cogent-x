@@ -1,29 +1,8 @@
-/**
- * Session Information Component
- * Displays current session info and allows clearing session
- */
-
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { getSessionInfo, clearSession, hasSession } from "@/lib/session";
 import { apiGet, apiDelete, API_ENDPOINTS } from "@/config/api";
@@ -44,11 +23,9 @@ export function SessionInfo() {
 
   const loadSessionStats = async () => {
     if (!hasSession()) return;
-
     try {
       setLoading(true);
       const response = await apiGet(API_ENDPOINTS.SESSION_INFO);
-
       if (response.ok) {
         const data = await response.json();
         if (data.exists) {
@@ -61,7 +38,7 @@ export function SessionInfo() {
         }
       }
     } catch (error) {
-      console.error("Failed to load session stats:", error);
+      setSessionStats(null);
     } finally {
       setLoading(false);
     }
@@ -70,46 +47,25 @@ export function SessionInfo() {
   const handleClearSession = async () => {
     try {
       setLoading(true);
-
-      // Try to delete session on backend
       try {
         await apiDelete(API_ENDPOINTS.SESSION_DELETE);
       } catch (error) {
-        // Backend might return 404 if session doesn't exist, that's ok
-        console.log("Backend session cleanup:", error);
+        // Ignore
       }
-
-      // Clear local session
       clearSession();
       setSessionStats(null);
-
-      toast({
-        title: "Session Cleared",
-        description:
-          "Your session has been cleared. A new session will be created on your next action.",
-      });
-
-      // Reload the page to reinitialize everything
+      toast({ title: "Session Cleared", description: "Your session has been cleared. A new session will be created on your next action." });
       setTimeout(() => window.location.reload(), 1000);
     } catch (error) {
-      console.error("Failed to clear session:", error);
-      toast({
-        title: "Error",
-        description: "Failed to clear session. Please try again.",
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: "Failed to clear session. Please try again.", variant: "destructive" });
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    loadSessionStats();
-  }, []);
+  useEffect(() => { loadSessionStats(); }, []);
 
-  if (!hasSession()) {
-    return null;
-  }
+  if (!hasSession()) return null;
 
   return (
     <Card className="border-primary/20">
