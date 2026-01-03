@@ -50,7 +50,21 @@ echo "Starting backend..."
 (cd backend && uvicorn main:app --reload --host 0.0.0.0 --port 8000 --log-level warning) &
 BACKEND_PID=$!
 
-sleep 2
+# Wait for backend to be ready (up to 30 seconds)
+echo -n "Waiting for backend to be ready"
+for i in {1..30}; do
+    if curl -s http://localhost:8000/api/v1/health > /dev/null 2>&1; then
+        echo " ✓"
+        echo "Backend is ready!"
+        break
+    fi
+    echo -n "."
+    if [ $i -eq 30 ]; then
+        echo " ✗"
+        echo "Warning: Backend didn't respond after 30 seconds"
+    fi
+    sleep 1
+done
 
 echo "Starting frontend..."
 if command -v bun &> /dev/null; then
@@ -59,8 +73,6 @@ else
     npm run dev &
 fi
 FRONTEND_PID=$!
-
-sleep 2
 
 echo ""
 echo "=== Services Running ==="

@@ -62,18 +62,27 @@ export const apiRequest = async (endpoint: string, options: RequestInit = {}, cu
     if (!customSessionId) processApiResponse(response);
     return response;
   } catch (error) {
-    console.error(`[API] Request failed for ${endpoint}:`, error);
+    if ((error as Error).name === 'AbortError') {
+      console.warn(`[API] Request aborted for ${endpoint}`);
+    } else {
+      console.error(`[API] Request failed for ${endpoint}:`, error);
+    }
     throw error;
   }
 };
 
 export const apiGet = async (endpoint: string, sessionId?: string): Promise<Response> => apiRequest(endpoint, {method: "GET"}, sessionId);
 
-export const apiPost = async (endpoint: string, data?: unknown, sessionId?: string): Promise<Response> => {
+export const apiPost = async (endpoint: string, data?: unknown, signalOrSessionId?: AbortSignal | string): Promise<Response> => {
+  const isSignal = signalOrSessionId instanceof AbortSignal;
+  const sessionId = isSignal ? undefined : signalOrSessionId;
+  const signal = isSignal ? signalOrSessionId : undefined;
+  
   return apiRequest(endpoint, {
     method: "POST",
     headers: {"Content-Type": "application/json"},
     body: data ? JSON.stringify(data) : undefined,
+    signal,
   }, sessionId);
 };
 

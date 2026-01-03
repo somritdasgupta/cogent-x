@@ -34,7 +34,10 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { API_ENDPOINTS, apiPost, apiGet, getApiDocsUrl } from "@/config/api";
 import { useToast } from "@/hooks/use-toast";
-import { createConversationSession, getConversationSession } from "@/lib/session";
+import {
+  createConversationSession,
+  getConversationSession,
+} from "@/lib/session";
 
 interface SourceInfo {
   url: string;
@@ -63,7 +66,8 @@ const QueryInterface = () => {
     const saved = localStorage.getItem("current_conversation_id");
     return saved || crypto.randomUUID();
   });
-  const [conversationTitle, setConversationTitle] = useState("New Conversation");
+  const [conversationTitle, setConversationTitle] =
+    useState("New Conversation");
   const [messages, setMessages] = useState<Message[]>(() => {
     const saved = localStorage.getItem("chat_messages");
     return saved ? JSON.parse(saved) : [];
@@ -80,6 +84,7 @@ const QueryInterface = () => {
     usedChunks: number[];
   } | null>(null);
   const [isConfigured, setIsConfigured] = useState(false);
+  const [hasDocuments, setHasDocuments] = useState(false);
   const [systemStatus, setSystemStatus] = useState({
     backend: false,
     llm: false,
@@ -135,26 +140,63 @@ const QueryInterface = () => {
   }, [messages]);
 
   useEffect(() => {
-    checkConfiguration();
-    checkStatus();
-    const interval = setInterval(checkStatus, 60000);
+    const init = async () => {
+      await checkConfiguration(); // Creates session first
+      await checkStatus(); // Uses the session
+    };
+    init();
+    const interval = setInterval(async () => {
+      await checkConfiguration();
+      await checkStatus();
+    }, 10000); // Reduced from 5s to 10s to minimize re-renders
     return () => clearInterval(interval);
   }, []);
 
-  const checkConfiguration = () => {
-    const hasProvider = localStorage.getItem("aiProvider");
-    setIsConfigured(!!hasProvider);
+  const checkConfiguration = async () => {
+    try {
+      const response = await apiGet(API_ENDPOINTS.CONFIG);
+      if (response.ok) {
+        const config = await response.json();
+        const hasApiKey = config.openai_api_key || config.gemini_api_key;
+        const newConfigured = !!hasApiKey;
+        // Only update if value actually changed
+        if (newConfigured !== isConfigured) {
+          setIsConfigured(newConfigured);
+        }
+      }
+    } catch {
+      if (isConfigured) setIsConfigured(false);
+    }
   };
 
   const checkStatus = async () => {
     try {
-      const response = await apiGet(API_ENDPOINTS.HEALTH);
-      if (response.ok) {
-        const data = await response.json();
-        setSystemStatus(data);
+      const [healthResponse, statsResponse] = await Promise.all([
+        apiGet(API_ENDPOINTS.HEALTH),
+        apiGet(API_ENDPOINTS.DATABASE_STATS),
+      ]);
+
+      if (healthResponse.ok) {
+        const data = await healthResponse.json();
+        // Only update if values actually changed
+        if (JSON.stringify(data) !== JSON.stringify(systemStatus)) {
+          setSystemStatus(data);
+        }
+      }
+
+      if (statsResponse.ok) {
+        const stats = await statsResponse.json();
+        const docsExist = stats.total_documents > 0;
+        if (docsExist !== hasDocuments) {
+          setHasDocuments(docsExist);
+        }
       }
     } catch {
-      setSystemStatus({ backend: false, llm: false, vectorDB: false });
+      const offline = { backend: false, llm: false, vectorDB: false };
+      if (JSON.stringify(offline) !== JSON.stringify(systemStatus)) {
+        setSystemStatus(offline);
+      }
+      if (hasDocuments) setHasDocuments(false);
     }
   };
 
@@ -187,7 +229,8 @@ const QueryInterface = () => {
     setIsProcessing(true);
 
     if (messages.length === 0) {
-      const title = queryText.substring(0, 50) + (queryText.length > 50 ? "..." : "");
+      const title =
+        queryText.substring(0, 50) + (queryText.length > 50 ? "..." : "");
       setConversationTitle(title);
     }
 
@@ -245,16 +288,18 @@ const QueryInterface = () => {
       <div className="h-full flex flex-col bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-950">
         {/* Quick Actions */}
         <div className="p-4 space-y-2">
-          <Button 
+          <Button
             variant="outline"
             className="w-full justify-start gap-3 h-12 rounded-xl font-semibold border-2"
-            onClick={() => window.open("https://stats.uptimerobot.com/FxzeOvqyqU", "_blank")}
+            onClick={() =>
+              window.open("https://stats.uptimerobot.com/FxzeOvqyqU", "_blank")
+            }
           >
             <Activity className="h-5 w-5" />
             <span>Status</span>
           </Button>
-          
-          <Button 
+
+          <Button
             variant="outline"
             className="w-full justify-start gap-3 h-12 rounded-xl font-semibold border-2"
             onClick={() => window.open(getApiDocsUrl(), "_blank")}
@@ -262,9 +307,9 @@ const QueryInterface = () => {
             <BookOpen className="h-5 w-5" />
             <span>API Docs</span>
           </Button>
-          
-          <UnifiedSettingsPanel onConfigChange={checkConfiguration} inSidebar>
-            <Button 
+
+          <UnifiedSettingsPanel onConfigChange={checkConfiguration}>
+            <Button
               variant="outline"
               className="w-full justify-start gap-3 h-12 rounded-xl font-semibold border-2"
             >
@@ -278,24 +323,28 @@ const QueryInterface = () => {
             </Button>
           </UnifiedSettingsPanel>
         </div>
-        
+
         <Separator />
-        
+
         {/* Chat History */}
         <div className="flex-1 overflow-hidden min-h-0">
           <ScrollArea className="h-full">
             <div className="p-3 overflow-hidden">
               <div className="flex items-center justify-between px-2 mb-2 gap-2">
-                <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex-shrink-0">Recent</p>
+                <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex-shrink-0">
+                  Recent
+                </p>
                 {(() => {
-                  const history = JSON.parse(localStorage.getItem("chat_history") || "[]");
+                  const history = JSON.parse(
+                    localStorage.getItem("chat_history") || "[]"
+                  );
                   return history.length > 0 ? (
                     <button
                       onClick={() => {
                         localStorage.removeItem("chat_history");
                         localStorage.removeItem("chat_messages");
                         setMessages([]);
-                        setChatHistoryUpdate(prev => prev + 1);
+                        setChatHistoryUpdate((prev) => prev + 1);
                       }}
                       className="text-[10px] font-semibold text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 transition-colors flex-shrink-0"
                       title="Clear all chat history"
@@ -306,34 +355,54 @@ const QueryInterface = () => {
                 })()}
               </div>
               {(() => {
-                const history = JSON.parse(localStorage.getItem("chat_history") || "[]");
+                const history = JSON.parse(
+                  localStorage.getItem("chat_history") || "[]"
+                );
                 return history.length > 0 ? (
                   <div className="space-y-1 max-w-full">
                     {history.slice(0, 10).map((conv: ChatConversation) => (
-                      <div 
+                      <div
                         key={conv.id}
                         className="group relative flex items-center gap-1 w-full max-w-full rounded-lg border-b border-border/50 pb-1"
                       >
                         <button
                           onClick={() => {
                             // Only save current if it has messages and is different from the one being loaded
-                            if (messages.length > 0 && messages[0]?.id !== conv.messages[0]?.id) {
-                              const conversations = JSON.parse(localStorage.getItem("chat_history") || "[]");
-                              const currentPreview = messages.find(m => m.role === "user")?.content.substring(0, 50) || "New conversation";
+                            if (
+                              messages.length > 0 &&
+                              messages[0]?.id !== conv.messages[0]?.id
+                            ) {
+                              const conversations = JSON.parse(
+                                localStorage.getItem("chat_history") || "[]"
+                              );
+                              const currentPreview =
+                                messages
+                                  .find((m) => m.role === "user")
+                                  ?.content.substring(0, 50) ||
+                                "New conversation";
                               // Check if current chat already exists in history
-                              const exists = conversations.some((c: ChatConversation) => c.preview === currentPreview);
+                              const exists = conversations.some(
+                                (c: ChatConversation) =>
+                                  c.preview === currentPreview
+                              );
                               if (!exists) {
                                 conversations.unshift({
                                   id: Date.now().toString(),
                                   timestamp: new Date().toISOString(),
                                   messages: messages,
-                                  preview: currentPreview
+                                  preview: currentPreview,
                                 });
-                                localStorage.setItem("chat_history", JSON.stringify(conversations.slice(0, 50)));
+                                localStorage.setItem(
+                                  "chat_history",
+                                  JSON.stringify(conversations.slice(0, 50))
+                                );
                               }
                             }
                             setMessages(conv.messages);
-                            localStorage.setItem("chat_messages", JSON.stringify(conv.messages));
+                            localStorage.setItem(
+                              "chat_messages",
+                              JSON.stringify(conv.messages)
+                            );
                           }}
                           className="flex-1 min-w-0 text-left py-2.5 px-3 text-sm hover:bg-muted rounded-lg transition-colors"
                         >
@@ -345,10 +414,17 @@ const QueryInterface = () => {
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            const history = JSON.parse(localStorage.getItem("chat_history") || "[]");
-                            const updated = history.filter((c: ChatConversation) => c.id !== conv.id);
-                            localStorage.setItem("chat_history", JSON.stringify(updated));
-                            setChatHistoryUpdate(prev => prev + 1);
+                            const history = JSON.parse(
+                              localStorage.getItem("chat_history") || "[]"
+                            );
+                            const updated = history.filter(
+                              (c: ChatConversation) => c.id !== conv.id
+                            );
+                            localStorage.setItem(
+                              "chat_history",
+                              JSON.stringify(updated)
+                            );
+                            setChatHistoryUpdate((prev) => prev + 1);
                           }}
                           className="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-red-100 dark:hover:bg-red-950 rounded-md transition-all flex-shrink-0"
                           title="Delete conversation"
@@ -363,31 +439,41 @@ const QueryInterface = () => {
                     <div className="w-12 h-12 rounded-xl bg-muted flex items-center justify-center mb-2">
                       <MessageSquare className="w-6 h-6 text-muted-foreground" />
                     </div>
-                    <p className="text-xs text-muted-foreground">No conversations yet</p>
+                    <p className="text-xs text-muted-foreground">
+                      No conversations yet
+                    </p>
                   </div>
                 );
               })()}
             </div>
           </ScrollArea>
         </div>
-        
+
         <Separator />
-        
+
         {/* New Chat Button */}
         <div className="p-4">
-          <Button 
+          <Button
             onClick={() => {
               if (messages.length > 0) {
-                const conversations = JSON.parse(localStorage.getItem("chat_history") || "[]");
+                const conversations = JSON.parse(
+                  localStorage.getItem("chat_history") || "[]"
+                );
                 conversations.unshift({
                   id: currentConversationId,
                   timestamp: new Date().toISOString(),
                   messages: messages,
-                  preview: messages.find(m => m.role === "user")?.content.substring(0, 50) || "New conversation",
-                  conversationId: currentConversationId
+                  preview:
+                    messages
+                      .find((m) => m.role === "user")
+                      ?.content.substring(0, 50) || "New conversation",
+                  conversationId: currentConversationId,
                 });
-                localStorage.setItem("chat_history", JSON.stringify(conversations.slice(0, 50)));
-                setChatHistoryUpdate(prev => prev + 1);
+                localStorage.setItem(
+                  "chat_history",
+                  JSON.stringify(conversations.slice(0, 50))
+                );
+                setChatHistoryUpdate((prev) => prev + 1);
               }
               localStorage.removeItem("chat_messages");
               const newConvId = crypto.randomUUID();
@@ -407,7 +493,14 @@ const QueryInterface = () => {
   };
 
   return (
-    <div className="flex h-screen flex-col">
+    <div className="flex h-screen flex-col relative overflow-hidden">
+      {/* Animated gradient background */}
+      <div className="fixed inset-0 -z-10 overflow-hidden">
+        <div className="absolute top-0 -left-4 w-72 h-72 bg-purple-300 dark:bg-purple-900 rounded-full mix-blend-multiply dark:mix-blend-soft-light filter blur-xl opacity-70 animate-blob" />
+        <div className="absolute top-0 -right-4 w-72 h-72 bg-yellow-300 dark:bg-yellow-900 rounded-full mix-blend-multiply dark:mix-blend-soft-light filter blur-xl opacity-70 animate-blob animation-delay-2000" />
+        <div className="absolute -bottom-8 left-20 w-72 h-72 bg-pink-300 dark:bg-pink-900 rounded-full mix-blend-multiply dark:mix-blend-soft-light filter blur-xl opacity-70 animate-blob animation-delay-4000" />
+      </div>
+
       <div className="flex flex-1 min-h-0">
         {/* Desktop Sidebar */}
         <div className="hidden md:flex md:flex-col w-64 border-r">
@@ -434,102 +527,26 @@ const QueryInterface = () => {
         <div className="flex-1 flex flex-col min-w-0">
           {!isConfigured ? (
             <div className="flex-1 flex flex-col items-center justify-center p-6">
-              <div className="w-full max-w-3xl space-y-8 text-center pb-32">
-                <div className="flex flex-col items-center gap-4">
-                  <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shadow-lg">
-                    <Upload className="w-10 h-10 text-white" />
+              <div className="w-full max-w-2xl space-y-6 text-center pb-32">
+                <div className="flex flex-col items-center gap-3">
+                  <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shadow-lg">
+                    <Sparkles className="w-8 h-8 text-white" />
                   </div>
-                  <div>
-                    <h1 className="text-4xl font-bold bg-gradient-to-r from-violet-600 to-purple-600 bg-clip-text text-transparent mb-2">
-                      Welcome to cogent-x
-                    </h1>
-                    <p className="text-lg text-muted-foreground">
-                      Private AI knowledge base for documentation
-                    </p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-left">
-                  <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950/30 dark:to-blue-900/30 rounded-xl p-5 border-2 border-blue-200 dark:border-blue-800">
-                    <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center mb-3 font-bold">
-                      1
-                    </div>
-                    <h3 className="font-bold text-lg mb-2">Configure AI</h3>
-                    <p className="text-sm text-muted-foreground">
-                      Choose Ollama (free, local), OpenAI, or Gemini
-                    </p>
-                  </div>
-                  <div className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-950/30 dark:to-purple-900/30 rounded-xl p-5 border-2 border-purple-200 dark:border-purple-800">
-                    <div className="w-10 h-10 rounded-full bg-purple-600 text-white flex items-center justify-center mb-3 font-bold">
-                      2
-                    </div>
-                    <h3 className="font-bold text-lg mb-2">Ingest Docs</h3>
-                    <p className="text-sm text-muted-foreground">
-                      Add your documentation URLs to build knowledge base
-                    </p>
-                  </div>
-                  <div className="bg-gradient-to-br from-pink-50 to-pink-100 dark:from-pink-950/30 dark:to-pink-900/30 rounded-xl p-5 border-2 border-pink-200 dark:border-pink-800">
-                    <div className="w-10 h-10 rounded-full bg-pink-600 text-white flex items-center justify-center mb-3 font-bold">
-                      3
-                    </div>
-                    <h3 className="font-bold text-lg mb-2">Ask Questions</h3>
-                    <p className="text-sm text-muted-foreground">
-                      Get AI answers with source citations
-                    </p>
-                  </div>
-                </div>
-
-                <div className="bg-muted/50 rounded-2xl p-6 space-y-4">
-                  <div className="flex items-center gap-2 justify-center">
-                    <Sparkles className="h-5 w-5 text-violet-600" />
-                    <h2 className="text-xl font-bold">How It Works</h2>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-left text-sm">
-                    <div className="flex gap-2">
-                      <Database className="h-5 w-5 text-violet-600 flex-shrink-0" />
-                      <div>
-                        <strong>RAG-Powered:</strong> Documents are chunked,
-                        embedded, and stored in vector database
-                      </div>
-                    </div>
-                    <div className="flex gap-2">
-                      <Zap className="h-5 w-5 text-violet-600 flex-shrink-0" />
-                      <div>
-                        <strong>Semantic Search:</strong> Finds most relevant
-                        chunks for your query
-                      </div>
-                    </div>
-                    <div className="flex gap-2">
-                      <Shield className="h-5 w-5 text-violet-600 flex-shrink-0" />
-                      <div>
-                        <strong>Private & Secure:</strong> Your data stays on
-                        your infrastructure
-                      </div>
-                    </div>
-                    <div className="flex gap-2">
-                      <FileText className="h-5 w-5 text-violet-600 flex-shrink-0" />
-                      <div>
-                        <strong>Source Citations:</strong> Every answer includes
-                        document references
-                      </div>
-                    </div>
-                  </div>
+                  <h1 className="text-3xl font-bold">Welcome to cogent-x</h1>
+                  <p className="text-muted-foreground">
+                    AI-powered knowledge base for your documentation
+                  </p>
                 </div>
 
                 <UnifiedSettingsPanel onConfigChange={checkConfiguration}>
                   <Button
                     size="lg"
-                    className="bg-violet-600 hover:bg-violet-700 rounded-xl font-semibold text-base px-8 py-6"
+                    className="bg-violet-600 hover:bg-violet-700 rounded-xl font-semibold px-8"
                   >
                     <Settings className="h-5 w-5 mr-2" />
-                    Get Started - Open Settings
+                    Get Started
                   </Button>
                 </UnifiedSettingsPanel>
-
-                <p className="text-xs text-muted-foreground">
-                  💡 Tip: Start with Ollama for free local AI, or use
-                  OpenAI/Gemini for best quality
-                </p>
               </div>
             </div>
           ) : messages.length === 0 ? (
@@ -549,12 +566,16 @@ const QueryInterface = () => {
                 {/* Setup Status Banner */}
                 <div className="bg-muted/30 border border-border rounded-xl p-4">
                   <div className="flex items-center justify-between mb-3">
-                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Setup Progress</p>
-                    <span className="text-xs text-muted-foreground">1/2</span>
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                      Setup Progress
+                    </p>
+                    <span className="text-xs text-muted-foreground">
+                      {(systemStatus.llm ? 1 : 0) + (hasDocuments ? 1 : 0)}/2
+                    </span>
                   </div>
                   <div className="space-y-2">
                     <div className="flex items-center gap-2.5">
-                      {systemStatus.backend && systemStatus.llm ? (
+                      {systemStatus.llm ? (
                         <div className="w-5 h-5 rounded-full bg-green-500 flex items-center justify-center flex-shrink-0">
                           <Check className="w-3 h-3 text-white" />
                         </div>
@@ -564,7 +585,13 @@ const QueryInterface = () => {
                       <span className="text-sm">Configure AI Provider</span>
                     </div>
                     <div className="flex items-center gap-2.5">
-                      <div className="w-5 h-5 rounded-full border-2 border-muted-foreground flex-shrink-0" />
+                      {hasDocuments ? (
+                        <div className="w-5 h-5 rounded-full bg-green-500 flex items-center justify-center flex-shrink-0">
+                          <Check className="w-3 h-3 text-white" />
+                        </div>
+                      ) : (
+                        <div className="w-5 h-5 rounded-full border-2 border-muted-foreground flex-shrink-0" />
+                      )}
                       <span className="text-sm">Ingest Documentation</span>
                     </div>
                   </div>
@@ -599,103 +626,125 @@ const QueryInterface = () => {
             <>
               {messages.length > 0 && (
                 <div className="fixed top-4 left-1/2 -translate-x-1/2 z-10 px-4 py-2 bg-background/95 backdrop-blur-sm border border-border rounded-full shadow-lg max-w-xs md:max-w-md">
-                  <p className="text-sm font-medium text-muted-foreground truncate text-center">{conversationTitle}</p>
+                  <p className="text-sm font-medium text-muted-foreground truncate text-center">
+                    {conversationTitle}
+                  </p>
                 </div>
               )}
               <ScrollArea className="flex-1">
-              <div className="w-full max-w-5xl mx-auto px-4 md:px-8 lg:px-12 pt-20 py-6 space-y-6 pb-24 md:pb-40">
-                {messages.map((message) => (
-                  <div key={message.id}>
-                    {message.role === "user" ? (
-                      <div className="flex justify-end mb-4">
-                        <div className="relative max-w-[85%] md:max-w-[70%] lg:max-w-[60%]">
-                          <div className="bg-gradient-to-br from-violet-600 to-purple-600 text-white rounded-2xl rounded-tr-sm px-4 py-3 shadow-md">
-                            <p className="text-[15px] leading-relaxed whitespace-pre-wrap break-words">
-                              {message.content}
-                            </p>
-                          </div>
-                          <span className="text-[10px] text-muted-foreground mt-1 block text-right">
-                            {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                          </span>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex gap-3 mb-4">
-                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center flex-shrink-0 shadow-md">
-                          <Sparkles className="w-4 h-4 text-white" />
-                        </div>
-                        <div className="flex-1 max-w-[85%] md:max-w-[70%] lg:max-w-[60%]">
-                          <div className="bg-muted/50 rounded-2xl rounded-tl-sm px-4 py-3 shadow-sm">
-                            <div className="prose prose-sm dark:prose-invert max-w-none prose-p:text-[15px] prose-p:leading-relaxed prose-p:my-1.5 prose-headings:font-bold prose-headings:mt-3 prose-headings:mb-1.5 prose-strong:font-semibold prose-code:bg-background prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-sm prose-pre:bg-background prose-pre:border prose-pre:border-border prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5">
-                              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                <div className="w-full max-w-5xl mx-auto px-4 md:px-8 lg:px-12 pt-20 py-6 space-y-6 pb-24 md:pb-40">
+                  {messages.map((message) => (
+                    <div key={message.id}>
+                      {message.role === "user" ? (
+                        <div className="flex justify-end mb-4">
+                          <div className="relative max-w-[85%] md:max-w-[70%] lg:max-w-[60%]">
+                            <div className="bg-gradient-to-br from-violet-600 to-purple-600 text-white rounded-2xl rounded-tr-sm px-4 py-3 shadow-md">
+                              <p className="text-[15px] leading-relaxed whitespace-pre-wrap break-words">
                                 {message.content}
-                              </ReactMarkdown>
+                              </p>
+                            </div>
+                            <span className="text-[10px] text-muted-foreground mt-1 block text-right">
+                              {new Date(message.timestamp).toLocaleTimeString(
+                                [],
+                                { hour: "2-digit", minute: "2-digit" }
+                              )}
+                            </span>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex gap-3 mb-4">
+                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center flex-shrink-0 shadow-md">
+                            <Sparkles className="w-4 h-4 text-white" />
+                          </div>
+                          <div className="flex-1 max-w-[85%] md:max-w-[70%] lg:max-w-[60%]">
+                            <div className="bg-muted/50 rounded-2xl rounded-tl-sm px-4 py-3 shadow-sm">
+                              <div className="prose prose-sm dark:prose-invert max-w-none prose-p:text-[15px] prose-p:leading-relaxed prose-p:my-1.5 prose-headings:font-bold prose-headings:mt-3 prose-headings:mb-1.5 prose-strong:font-semibold prose-code:bg-background prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-sm prose-pre:bg-background prose-pre:border prose-pre:border-border prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5">
+                                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                  {message.content}
+                                </ReactMarkdown>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2 mt-2">
+                              <span className="text-[10px] text-muted-foreground">
+                                {new Date(message.timestamp).toLocaleTimeString(
+                                  [],
+                                  { hour: "2-digit", minute: "2-digit" }
+                                )}
+                              </span>
+                              {message.sources &&
+                                message.sources.length > 0 && (
+                                  <div className="flex gap-1.5">
+                                    {message.sources.map((source, idx) => (
+                                      <button
+                                        key={idx}
+                                        onClick={() =>
+                                          setViewingSource({
+                                            url: source.url,
+                                            usedChunks: source.used_chunks.map(
+                                              (c) => c.index
+                                            ),
+                                          })
+                                        }
+                                        className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-1 rounded-md bg-violet-100 dark:bg-violet-950 text-violet-700 dark:text-violet-300 hover:bg-violet-200 dark:hover:bg-violet-900 transition-colors"
+                                      >
+                                        <FileText className="w-2.5 h-2.5" />
+                                        {idx + 1}
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() =>
+                                  copyToClipboard(message.content, message.id)
+                                }
+                                className="h-6 px-2 text-[10px] hover:bg-muted"
+                              >
+                                {copiedMessageId === message.id ? (
+                                  <Check className="h-3 w-3 mr-1" />
+                                ) : (
+                                  <Copy className="h-3 w-3 mr-1" />
+                                )}
+                                {copiedMessageId === message.id
+                                  ? "Copied"
+                                  : "Copy"}
+                              </Button>
                             </div>
                           </div>
-                          <div className="flex items-center gap-2 mt-2">
-                            <span className="text-[10px] text-muted-foreground">
-                              {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                            </span>
-                            {message.sources && message.sources.length > 0 && (
-                              <div className="flex gap-1.5">
-                                {message.sources.map((source, idx) => (
-                                  <button
-                                    key={idx}
-                                    onClick={() =>
-                                      setViewingSource({
-                                        url: source.url,
-                                        usedChunks: source.used_chunks.map(
-                                          (c) => c.index
-                                        ),
-                                      })
-                                    }
-                                    className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-1 rounded-md bg-violet-100 dark:bg-violet-950 text-violet-700 dark:text-violet-300 hover:bg-violet-200 dark:hover:bg-violet-900 transition-colors"
-                                  >
-                                    <FileText className="w-2.5 h-2.5" />
-                                    {idx + 1}
-                                  </button>
-                                ))}
-                              </div>
-                            )}
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() =>
-                                copyToClipboard(message.content, message.id)
-                              }
-                              className="h-6 px-2 text-[10px] hover:bg-muted"
-                            >
-                              {copiedMessageId === message.id ? (
-                                <Check className="h-3 w-3 mr-1" />
-                              ) : (
-                                <Copy className="h-3 w-3 mr-1" />
-                              )}
-                              {copiedMessageId === message.id ? "Copied" : "Copy"}
-                            </Button>
-                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                  {isProcessing && (
+                    <div className="flex gap-3 mb-4">
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shadow-md">
+                        <Loader2 className="w-4 h-4 text-white animate-spin" />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm text-muted-foreground font-medium">
+                          Thinking
+                        </p>
+                        <div className="flex gap-1">
+                          <span
+                            className="w-1.5 h-1.5 bg-violet-600 rounded-full animate-bounce"
+                            style={{ animationDelay: "0ms" }}
+                          />
+                          <span
+                            className="w-1.5 h-1.5 bg-violet-600 rounded-full animate-bounce"
+                            style={{ animationDelay: "150ms" }}
+                          />
+                          <span
+                            className="w-1.5 h-1.5 bg-violet-600 rounded-full animate-bounce"
+                            style={{ animationDelay: "300ms" }}
+                          />
                         </div>
                       </div>
-                    )}
-                  </div>
-                ))}
-                {isProcessing && (
-                  <div className="flex gap-3 mb-4">
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shadow-md">
-                      <Loader2 className="w-4 h-4 text-white animate-spin" />
                     </div>
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm text-muted-foreground font-medium">Thinking</p>
-                      <div className="flex gap-1">
-                        <span className="w-1.5 h-1.5 bg-violet-600 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
-                        <span className="w-1.5 h-1.5 bg-violet-600 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
-                        <span className="w-1.5 h-1.5 bg-violet-600 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
-                      </div>
-                    </div>
-                  </div>
-                )}
-                <div ref={scrollRef} />
-              </div>
-            </ScrollArea>
+                  )}
+                  <div ref={scrollRef} />
+                </div>
+              </ScrollArea>
             </>
           )}
 

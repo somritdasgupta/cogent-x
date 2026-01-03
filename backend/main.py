@@ -76,6 +76,7 @@ VECTOR_DB_DIR = Path(__file__).parent.parent / "vector_db"
 CONFIG_DIR.mkdir(exist_ok=True)
 VECTOR_DB_DIR.mkdir(exist_ok=True)
 
+
 def get_encryption_key() -> bytes:
     if KEY_FILE.exists():
         with open(KEY_FILE, "rb") as f:
@@ -89,8 +90,10 @@ def get_encryption_key() -> bytes:
 ENCRYPTION_KEY = get_encryption_key()
 cipher_suite = Fernet(ENCRYPTION_KEY)
 
+
 def encrypt_value(value: str) -> str:
     return cipher_suite.encrypt(value.encode()).decode() if value else ""
+
 
 def decrypt_value(encrypted_value: str) -> str:
     if not encrypted_value:
@@ -116,26 +119,32 @@ DEFAULT_CONFIG = {
     "top_k_results": int(os.getenv("TOP_K_RESULTS", "5")),
 }
 
+
 def load_config() -> Dict[str, Any]:
     if CONFIG_FILE.exists():
         try:
             with open(CONFIG_FILE, "r") as f:
                 config = json.load(f)
                 if config.get("openai_api_key"):
-                    config["openai_api_key"] = decrypt_value(config["openai_api_key"])
+                    config["openai_api_key"] = decrypt_value(
+                        config["openai_api_key"])
                 if config.get("gemini_api_key"):
-                    config["gemini_api_key"] = decrypt_value(config["gemini_api_key"])
+                    config["gemini_api_key"] = decrypt_value(
+                        config["gemini_api_key"])
                 return config
         except:
             return DEFAULT_CONFIG.copy()
     return DEFAULT_CONFIG.copy()
 
+
 def save_config(config: dict) -> None:
     config_to_save = config.copy()
     if config_to_save.get("openai_api_key"):
-        config_to_save["openai_api_key"] = encrypt_value(config_to_save["openai_api_key"])
+        config_to_save["openai_api_key"] = encrypt_value(
+            config_to_save["openai_api_key"])
     if config_to_save.get("gemini_api_key"):
-        config_to_save["gemini_api_key"] = encrypt_value(config_to_save["gemini_api_key"])
+        config_to_save["gemini_api_key"] = encrypt_value(
+            config_to_save["gemini_api_key"])
     with open(CONFIG_FILE, "w") as f:
         json.dump(config_to_save, f, indent=2)
 
@@ -180,7 +189,8 @@ class VectorDatabase:
         try:
             faiss.write_index(self.index, str(self.index_path))
             with open(self.metadata_path, "wb") as f:
-                pickle.dump({"documents": self.documents, "metadatas": self.metadatas}, f)
+                pickle.dump({"documents": self.documents,
+                            "metadatas": self.metadatas}, f)
         except:
             pass
 
@@ -189,12 +199,13 @@ class VectorDatabase:
             self._init_new_index()
         if not self.index:
             raise RuntimeError("FAISS not installed")
-        
+
         embeddings_array = np.array(embeddings, dtype=np.float32)
-        if self.index.ntotal == 0 and embeddings_array.shape[1] != self.dimension:  # type: ignore
+        # type: ignore
+        if self.index.ntotal == 0 and embeddings_array.shape[1] != self.dimension:
             self.dimension = embeddings_array.shape[1]
             self._init_new_index()
-        
+
         self.index.add(embeddings_array)  # type: ignore
         self.documents.extend(documents)
         self.metadatas.extend(metadatas)
@@ -203,14 +214,16 @@ class VectorDatabase:
     def search(self, query_embedding: List[float], k: int = 5) -> Dict[str, Any]:
         if not self.index or self.index.ntotal == 0:
             return {"documents": [], "metadatas": [], "distances": []}
-        
+
         query_array = np.array([query_embedding], dtype=np.float32)
         k = min(k, self.index.ntotal)  # type: ignore
         distances, indices = self.index.search(query_array, k)  # type: ignore
-        
-        results_docs = [self.documents[i] for i in indices[0] if i < len(self.documents)]
-        results_meta = [self.metadatas[i] for i in indices[0] if i < len(self.metadatas)]
-        
+
+        results_docs = [self.documents[i]
+                        for i in indices[0] if i < len(self.documents)]
+        results_meta = [self.metadatas[i]
+                        for i in indices[0] if i < len(self.metadatas)]
+
         return {"documents": [results_docs], "metadatas": [results_meta], "distances": distances.tolist()}
 
     def count(self) -> int:
@@ -233,11 +246,13 @@ class SessionManager:
         self._cleanup_expired()
         if not session_id or session_id not in self.sessions:
             session_id = str(uuid4())
+            # Load latest config from disk for new sessions
+            latest_config = load_config()
             self.sessions[session_id] = {
                 'db': VectorDatabase.__new__(VectorDatabase),
                 'created_at': datetime.now(),
                 'last_accessed': datetime.now(),
-                'config': DEFAULT_CONFIG.copy()
+                'config': latest_config.copy()
             }
             db = self.sessions[session_id]['db']
             db.dimension = 1024
@@ -285,7 +300,8 @@ class SessionManager:
         return datetime.now() - session['last_accessed'] > self.session_timeout
 
     def _cleanup_expired(self):
-        expired = [sid for sid, sess in self.sessions.items() if self._is_expired(sess)]
+        expired = [sid for sid, sess in self.sessions.items()
+                   if self._is_expired(sess)]
         for sid in expired:
             del self.sessions[sid]
 
@@ -306,6 +322,7 @@ session_manager = SessionManager(session_timeout_hours=24)
 vector_db = VectorDatabase()
 embedding_model = None
 
+
 def get_embedding_model():
     global embedding_model, SentenceTransformer
     if not embedding_model:
@@ -314,12 +331,15 @@ def get_embedding_model():
                 from sentence_transformers import SentenceTransformer as ST
                 SentenceTransformer = ST
             except ImportError:
-                raise HTTPException(status_code=500, detail="sentence-transformers not installed")
+                raise HTTPException(
+                    status_code=500, detail="sentence-transformers not installed")
         try:
-            model_name = CURRENT_CONFIG.get("embedding_model_name", "BAAI/bge-large-en-v1.5")
+            model_name = CURRENT_CONFIG.get(
+                "embedding_model_name", "BAAI/bge-large-en-v1.5")
             embedding_model = SentenceTransformer(model_name)
         except Exception:
-            embedding_model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
+            embedding_model = SentenceTransformer(
+                "sentence-transformers/all-MiniLM-L6-v2")
     return embedding_model
 
 
@@ -331,16 +351,18 @@ def get_embeddings(texts: List[str], provider: str = "opensource", task_type: st
             import openai
         except ImportError:
             raise HTTPException(status_code=500, detail="openai not installed")
-        
+
         api_key = active_config.get("openai_api_key")
         if not api_key:
-            raise HTTPException(status_code=400, detail="OpenAI API key not configured")
-        
+            raise HTTPException(
+                status_code=400, detail="OpenAI API key not configured")
+
         client = openai.OpenAI(api_key=api_key)
-        model = active_config.get("openai_embedding_model", "text-embedding-3-small")
+        model = active_config.get(
+            "openai_embedding_model", "text-embedding-3-small")
         embeddings = []
         batch_size = 100
-        
+
         for i in range(0, len(texts), batch_size):
             batch = texts[i:i + batch_size]
             response = client.embeddings.create(input=batch, model=model)
@@ -351,72 +373,131 @@ def get_embeddings(texts: List[str], provider: str = "opensource", task_type: st
         try:
             import google.generativeai as genai
         except ImportError:
-            raise HTTPException(status_code=500, detail="google-generativeai not installed")
-        
+            raise HTTPException(
+                status_code=500, detail="google-generativeai not installed")
+
         api_key = active_config.get("gemini_api_key")
         if not api_key:
-            raise HTTPException(status_code=400, detail="Gemini API key not configured")
-        
+            raise HTTPException(
+                status_code=400, detail="Gemini API key not configured")
+
         genai.configure(api_key=api_key)
-        embedding_model = active_config.get("gemini_embedding_model", "models/text-embedding-004")
+        embedding_model = active_config.get(
+            "gemini_embedding_model", "models/text-embedding-004")
         embeddings = []
         batch_size = 50
-        
+
         for i in range(0, len(texts), batch_size):
             batch = texts[i:i + batch_size]
             for text in batch:
-                result = genai.embed_content(model=embedding_model, content=text, task_type=task_type)
+                result = genai.embed_content(
+                    model=embedding_model, content=text, task_type=task_type)
                 embeddings.append(result['embedding'])
         return embeddings
-    
+
     else:
         model = get_embedding_model()
-        embeddings_array = model.encode(texts, convert_to_numpy=True, batch_size=32, show_progress_bar=False)
+        embeddings_array = model.encode(
+            texts, convert_to_numpy=True, batch_size=32, show_progress_bar=False)
         return embeddings_array.tolist()
 
 
 def scrape_url(url: str) -> Dict[str, str]:
     if not BeautifulSoup:
-        raise HTTPException(status_code=500, detail="beautifulsoup4 not installed")
+        raise HTTPException(
+            status_code=500, detail="beautifulsoup4 not installed")
     if not html2text:
         raise HTTPException(status_code=500, detail="html2text not installed")
-    
-    try:
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
-        response = requests.get(url, headers=headers, timeout=30)
-        response.raise_for_status()
-        
-        soup = BeautifulSoup(response.content, 'html.parser')
-        for script in soup(["script", "style", "nav", "footer", "aside", "header"]):
-            script.decompose()
-        
-        title = soup.find('title')
-        title_text = title.get_text().strip() if title else url
-        
-        h = html2text.HTML2Text()
-        h.ignore_links = False
-        h.ignore_images = True
-        h.ignore_emphasis = False
-        h.body_width = 0
-        h.unicode_snob = True
-        
-        content = h.handle(str(soup))
-        content = re.sub(r'\n{3,}', '\n\n', content).strip()
-        
-        return {"title": title_text, "content": content, "url": url}
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Failed to scrape: {str(e)}")
+
+    # Try multiple user agents in case one is blocked
+    user_agents = [
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    ]
+
+    last_error = None
+    for user_agent in user_agents:
+        try:
+            headers = {
+                'User-Agent': user_agent,
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.5',
+                'Accept-Encoding': 'gzip, deflate, br',
+                'DNT': '1',
+                'Connection': 'keep-alive',
+                'Upgrade-Insecure-Requests': '1'
+            }
+            response = requests.get(
+                url, headers=headers, timeout=30, allow_redirects=True)
+            response.raise_for_status()
+
+            soup = BeautifulSoup(response.content, 'html.parser')
+            for script in soup(["script", "style", "nav", "footer", "aside", "header"]):
+                script.decompose()
+
+            title = soup.find('title')
+            title_text = title.get_text().strip() if title else url
+
+            h = html2text.HTML2Text()
+            h.ignore_links = False
+            h.ignore_images = True
+            h.ignore_emphasis = False
+            h.body_width = 0
+            h.unicode_snob = True
+
+            content = h.handle(str(soup))
+            content = re.sub(r'\n{3,}', '\n\n', content).strip()
+
+            if not content or len(content.strip()) < 50:
+                raise ValueError("Page content is empty or too short")
+
+            return {"title": title_text, "content": content, "url": url}
+
+        except requests.exceptions.HTTPError as e:
+            last_error = e
+            if e.response.status_code == 403:
+                continue  # Try next user agent
+            elif e.response.status_code == 404:
+                raise HTTPException(
+                    status_code=400, detail=f"Page not found (404): {url}")
+            else:
+                raise HTTPException(
+                    status_code=400, detail=f"HTTP {e.response.status_code}: Unable to access {url}")
+        except requests.exceptions.Timeout:
+            raise HTTPException(
+                status_code=400, detail=f"Request timeout: Website took too long to respond. Try a different URL.")
+        except requests.exceptions.ConnectionError:
+            raise HTTPException(
+                status_code=400, detail=f"Connection failed: Unable to reach {url}. Check your internet connection.")
+        except Exception as e:
+            last_error = e
+            continue
+
+    # If all user agents failed, raise appropriate exception
+    if last_error:
+        if isinstance(last_error, requests.exceptions.HTTPError) and last_error.response.status_code == 403:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Access denied: {url} is blocking automated access. Try a different documentation source or use their official API."
+            )
+        raise HTTPException(
+            status_code=400, detail=f"Failed to scrape: {str(last_error)}")
+
+    # Fallback if no error but also no success (should not reach here)
+    raise HTTPException(
+        status_code=400, detail="Failed to scrape: Unknown error")
 
 
 def chunk_text(text: str, chunk_size: int = 1000, overlap: int = 200) -> List[str]:
     if len(text) <= chunk_size:
         return [text]
-    
+
     chunks = []
     start = 0
     text_len = len(text)
     sentence_end = re.compile(r'[.!?]\s+')
-    
+
     while start < text_len:
         end = min(start + chunk_size, text_len)
         if end < text_len:
@@ -425,15 +506,15 @@ def chunk_text(text: str, chunk_size: int = 1000, overlap: int = 200) -> List[st
             matches = list(sentence_end.finditer(remaining))
             if matches:
                 end = search_start + matches[-1].end()
-        
+
         chunk = text[start:end].strip()
         if chunk and len(chunk) > 10:
             chunks.append(chunk)
-        
+
         if end >= text_len:
             break
         start = end - overlap
-    
+
     return chunks
 
 
@@ -449,26 +530,30 @@ Question: {prompt}
 Answer:"""
 
     if provider == "opensource":
-        ollama_url = active_config.get("ollama_base_url", "http://localhost:11434")
+        ollama_url = active_config.get(
+            "ollama_base_url", "http://localhost:11434")
         model = active_config.get("ollama_model", "llama3:8b")
         try:
-            response = requests.post(f"{ollama_url}/api/generate", json={"model": model, "prompt": full_prompt, "stream": False}, timeout=120)
+            response = requests.post(f"{ollama_url}/api/generate", json={
+                                     "model": model, "prompt": full_prompt, "stream": False}, timeout=120)
             response.raise_for_status()
             result = response.json().get("response", "")
             return result if result else "No response generated"
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Ollama error: {str(e)}")
+            raise HTTPException(
+                status_code=500, detail=f"Ollama error: {str(e)}")
 
     elif provider == "openai":
         try:
             import openai
         except ImportError:
             raise HTTPException(status_code=500, detail="openai not installed")
-        
+
         api_key = active_config.get("openai_api_key")
         if not api_key:
-            raise HTTPException(status_code=400, detail="OpenAI API key not configured")
-        
+            raise HTTPException(
+                status_code=400, detail="OpenAI API key not configured")
+
         client = openai.OpenAI(api_key=api_key)
         model = active_config.get("openai_model", "gpt-4")
         try:
@@ -484,28 +569,55 @@ Answer:"""
             content = response.choices[0].message.content
             return content if content else "No response generated"
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"OpenAI error: {str(e)}")
+            raise HTTPException(
+                status_code=500, detail=f"OpenAI error: {str(e)}")
 
     elif provider == "gemini":
         try:
             import google.generativeai as genai
         except ImportError:
-            raise HTTPException(status_code=500, detail="google-generativeai not installed")
-        
+            raise HTTPException(
+                status_code=500, detail="google-generativeai not installed")
+
         api_key = active_config.get("gemini_api_key")
         if not api_key:
-            raise HTTPException(status_code=400, detail="Gemini API key not configured")
-        
+            raise HTTPException(
+                status_code=400, detail="Gemini API key not configured")
+
         genai.configure(api_key=api_key)
         model_name = active_config.get("gemini_model", "gemini-pro")
-        model = genai.GenerativeModel(model_name)
+
         try:
+            model = genai.GenerativeModel(model_name)
             response = model.generate_content(full_prompt)
+
+            # Handle blocked or empty responses
+            if not response or not hasattr(response, 'text') or not response.text:
+                if hasattr(response, 'prompt_feedback'):
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Content blocked by Gemini: {response.prompt_feedback}"
+                    )
+                raise HTTPException(
+                    status_code=500, detail="Gemini returned empty response")
+
             return response.text
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Gemini error: {str(e)}")
-    
-    raise HTTPException(status_code=400, detail=f"Unknown provider: {provider}")
+            error_msg = str(e)
+            if "API_KEY_INVALID" in error_msg or "invalid api key" in error_msg.lower():
+                raise HTTPException(
+                    status_code=400, detail="Invalid Gemini API key")
+            elif "not found" in error_msg.lower() or "does not exist" in error_msg.lower():
+                raise HTTPException(
+                    status_code=400, detail=f"Model '{model_name}' not found. Try 'gemini-2.0-flash-exp' or 'gemini-1.5-flash'")
+            elif "quota" in error_msg.lower():
+                raise HTTPException(
+                    status_code=429, detail="Gemini API quota exceeded")
+            raise HTTPException(
+                status_code=500, detail=f"Gemini error: {error_msg}")
+
+    raise HTTPException(
+        status_code=400, detail=f"Unknown provider: {provider}")
 
 
 def check_ollama_health(session_config: Optional[Dict] = None) -> bool:
@@ -522,6 +634,7 @@ def check_ollama_health(session_config: Optional[Dict] = None) -> bool:
         return response.status_code == 200
     except:
         return False
+
 
 def check_vectordb_health() -> bool:
     try:
@@ -563,7 +676,12 @@ class QueryRequest(BaseModel):
 @app.get("/api/v1/health")
 @app.head("/api/v1/health")
 async def health_check(x_session_id: Optional[str] = Header(None)):
-    session_config = session_manager.get_session_config(x_session_id) if x_session_id else None
+    session_config = None
+    if x_session_id:
+        session_config = session_manager.get_session_config(x_session_id)
+    if not session_config:
+        session_config = CURRENT_CONFIG
+
     return {
         "backend": True,
         "llm": check_ollama_health(session_config),
@@ -577,17 +695,29 @@ async def health_check(x_session_id: Optional[str] = Header(None)):
 async def get_configuration(response: Response, x_session_id: Optional[str] = Header(None)):
     session_id, _ = session_manager.get_or_create_session(x_session_id)
     response.headers["X-Session-Id"] = session_id
-    config = session_manager.get_session_config(session_id) or DEFAULT_CONFIG.copy()
-    
+
+    # Load from global config first, then merge with session config
+    global CURRENT_CONFIG
+    CURRENT_CONFIG = load_config()  # Reload from disk to get latest
+    config = CURRENT_CONFIG.copy()
+
+    # Merge with session-specific config if exists
+    session_config = session_manager.get_session_config(session_id)
+    if session_config:
+        config.update(session_config)
+
+    # Mask sensitive keys for display
     if config.get("openai_api_key"):
         key = config["openai_api_key"]
         if len(key) > 8:
-            config["openai_api_key"] = key[:4] + "•" * (len(key) - 8) + key[-4:]
+            config["openai_api_key"] = key[:4] + \
+                "•" * (len(key) - 8) + key[-4:]
     if config.get("gemini_api_key"):
         key = config["gemini_api_key"]
         if len(key) > 8:
-            config["gemini_api_key"] = key[:4] + "•" * (len(key) - 8) + key[-4:]
-    
+            config["gemini_api_key"] = key[:4] + \
+                "•" * (len(key) - 8) + key[-4:]
+
     return config
 
 
@@ -597,44 +727,64 @@ async def update_configuration(config: Configuration, response: Response, x_sess
         session_id, _ = session_manager.get_or_create_session(x_session_id)
         response.headers["X-Session-Id"] = session_id
         new_config = config.dict()
-        current_session_config = session_manager.get_session_config(session_id) or DEFAULT_CONFIG.copy()
-        
+
+        # Load current global config and session config
+        global CURRENT_CONFIG
+        CURRENT_CONFIG = load_config()
+        current_session_config = session_manager.get_session_config(
+            session_id) or CURRENT_CONFIG.copy()
+
+        # Handle masked API keys - preserve existing values if masked
         if new_config.get("openai_api_key") and "•" in new_config["openai_api_key"]:
-            new_config["openai_api_key"] = current_session_config.get("openai_api_key", "")
+            new_config["openai_api_key"] = current_session_config.get(
+                "openai_api_key", CURRENT_CONFIG.get("openai_api_key", ""))
         if new_config.get("gemini_api_key") and "•" in new_config["gemini_api_key"]:
-            new_config["gemini_api_key"] = current_session_config.get("gemini_api_key", "")
-        
+            new_config["gemini_api_key"] = current_session_config.get(
+                "gemini_api_key", CURRENT_CONFIG.get("gemini_api_key", ""))
+
+        # Save to BOTH session AND global disk config
         session_manager.set_session_config(session_id, new_config)
-        return {"message": "Configuration updated for your session", "note": "Config is private to your session only"}
+        save_config(new_config)  # Persist to disk
+        CURRENT_CONFIG = new_config.copy()  # Update in-memory global config
+
+        return {"message": "Configuration saved successfully", "persisted": True}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to save: {str(e)}")
+        logger.error(f"Failed to save config: {str(e)}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(
+            status_code=500, detail=f"Failed to save: {str(e)}")
 
 
 @app.post("/api/v1/ingest")
 async def ingest_document(request: IngestRequest, response: Response, x_session_id: Optional[str] = Header(None)):
     try:
-        session_id, session_db = session_manager.get_or_create_session(x_session_id)
+        session_id, session_db = session_manager.get_or_create_session(
+            x_session_id)
         response.headers["X-Session-Id"] = session_id
-        session_config = session_manager.get_session_config(session_id) or DEFAULT_CONFIG.copy()
-        
+        session_config = session_manager.get_session_config(
+            session_id) or DEFAULT_CONFIG.copy()
+
         scraped_data = scrape_url(request.url)
         chunk_size = session_config.get("chunk_size", 1000)
         chunk_overlap = session_config.get("chunk_overlap", 200)
         chunks = chunk_text(scraped_data["content"], chunk_size, chunk_overlap)
-        
+
         if not chunks:
             raise HTTPException(status_code=400, detail="No content extracted")
-        
+
         provider = request.provider if request.provider else "opensource"
-        embeddings = get_embeddings(chunks, provider, task_type="retrieval_document", config=session_config)
-        
+        embeddings = get_embeddings(
+            chunks, provider, task_type="retrieval_document", config=session_config)
+
         metadatas = [
-            {"source": request.url, "title": scraped_data["title"], "chunk_index": i, "total_chunks": len(chunks), "session_id": session_id, "conversation_id": request.conversation_id or "default"}
+            {"source": request.url, "title": scraped_data["title"], "chunk_index": i, "total_chunks": len(
+                chunks), "session_id": session_id, "conversation_id": request.conversation_id or "default"}
             for i in range(len(chunks))
         ]
-        
-        session_db.add(embeddings=embeddings, documents=chunks, metadatas=metadatas)
-        
+
+        session_db.add(embeddings=embeddings,
+                       documents=chunks, metadatas=metadatas)
+
         return {
             "message": "Document ingested successfully",
             "title": scraped_data["title"],
@@ -645,7 +795,65 @@ async def ingest_document(request: IngestRequest, response: Response, x_session_
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Ingestion failed: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Ingestion failed: {str(e)}")
+
+
+@app.post("/api/v1/ingest/manual")
+async def ingest_manual_content(request: dict, response: Response, x_session_id: Optional[str] = Header(None)):
+    """Ingest manually pasted content without web scraping"""
+    try:
+        session_id, session_db = session_manager.get_or_create_session(
+            x_session_id)
+        response.headers["X-Session-Id"] = session_id
+        session_config = session_manager.get_session_config(
+            session_id) or DEFAULT_CONFIG.copy()
+
+        title = request.get("title", "Manual Document").strip()
+        content = request.get("content", "").strip()
+        provider = request.get("provider", "opensource")
+        conversation_id = request.get("conversation_id", "default")
+
+        if not content:
+            raise HTTPException(
+                status_code=400, detail="Content cannot be empty")
+
+        if len(content) < 50:
+            raise HTTPException(
+                status_code=400, detail="Content too short (minimum 50 characters)")
+
+        chunk_size = session_config.get("chunk_size", 1000)
+        chunk_overlap = session_config.get("chunk_overlap", 200)
+        chunks = chunk_text(content, chunk_size, chunk_overlap)
+
+        if not chunks:
+            raise HTTPException(
+                status_code=400, detail="No content chunks created")
+
+        embeddings = get_embeddings(
+            chunks, provider, task_type="retrieval_document", config=session_config)
+
+        metadatas = [
+            {"source": "manual", "title": title, "chunk_index": i, "total_chunks": len(
+                chunks), "session_id": session_id, "conversation_id": conversation_id}
+            for i in range(len(chunks))
+        ]
+
+        session_db.add(embeddings=embeddings,
+                       documents=chunks, metadatas=metadatas)
+
+        return {
+            "message": "Manual content ingested successfully",
+            "title": title,
+            "chunks_created": len(chunks),
+            "source": "manual",
+            "session_id": session_id
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Manual ingestion failed: {str(e)}")
 
 
 @app.get("/api/v1/knowledge-bases")
@@ -656,7 +864,8 @@ async def get_knowledge_bases(x_session_id: Optional[str] = Header(None)):
         session_db = session_manager.get_session(x_session_id)
         if not session_db:
             return {"knowledge_bases": []}
-        sources = {metadata.get("title") for metadata in session_db.metadatas if metadata and metadata.get("title")}
+        sources = {metadata.get(
+            "title") for metadata in session_db.metadatas if metadata and metadata.get("title")}
         return {"knowledge_bases": sorted([s for s in sources if s])}
     except:
         return {"knowledge_bases": []}
@@ -665,39 +874,58 @@ async def get_knowledge_bases(x_session_id: Optional[str] = Header(None)):
 @app.post("/api/v1/ask")
 async def query_documents(request: QueryRequest, x_session_id: Optional[str] = Header(None)):
     try:
+        logger.info(
+            f"Query request: provider={request.provider}, conversation_id={request.conversation_id}")
+
         if not x_session_id:
             return {"answer": "No session found. Please ingest documents first.", "sources": [], "session_required": True}
-        
+
         session_db = session_manager.get_session(x_session_id)
         if not session_db:
             return {"answer": "Session expired. Please ingest documents again.", "sources": [], "session_expired": True}
-        
-        session_config = session_manager.get_session_config(x_session_id) or DEFAULT_CONFIG.copy()
-        query_embedding = get_embeddings([request.query], request.provider, task_type="retrieval_query", config=session_config)[0]
+
+        session_config = session_manager.get_session_config(
+            x_session_id) or DEFAULT_CONFIG.copy()
+
+        logger.info(
+            f"Getting embeddings for query with provider: {request.provider}")
+        query_embedding = get_embeddings(
+            [request.query], request.provider, task_type="retrieval_query", config=session_config)[0]
+
         top_k = session_config.get("top_k_results", 5)
+        logger.info(f"Searching with top_k={top_k}")
         results = session_db.search(query_embedding, k=top_k)
-        
+        logger.info(
+            f"Retrieved {len(results.get('documents', [[]])[0])} chunks from vector DB")
+
         if not results or not results.get("documents") or not results["documents"][0]:
             return {"answer": "I don't have enough information to answer. Please ingest relevant documentation first.", "sources": []}
-        
+
         documents = results["documents"][0]
         metadatas_list = results.get("metadatas", [[]])[0]
-        
-        # Filter by conversation_id if provided
+
+        # Smart filtering: conversation-specific OR global documents
         if request.conversation_id:
             filtered_docs = []
             filtered_metas = []
             for doc, meta in zip(documents, metadatas_list):
-                if meta and meta.get("conversation_id") == request.conversation_id:
-                    filtered_docs.append(doc)
-                    filtered_metas.append(meta)
+                if meta:
+                    conv_id = meta.get("conversation_id")
+                    # Include if: matches conversation OR is global
+                    if conv_id == request.conversation_id or conv_id == "global":
+                        filtered_docs.append(doc)
+                        filtered_metas.append(meta)
             if not filtered_docs:
                 return {"answer": "No documents found for this conversation. Please ingest documents first.", "sources": []}
             documents = filtered_docs
             metadatas_list = filtered_metas
+
         context = "\n\n".join(documents)
-        answer = query_llm(request.query, context, request.provider, config=session_config)
-        
+        logger.info(
+            f"Querying LLM with provider: {request.provider}, context length: {len(context)}")
+        answer = query_llm(request.query, context,
+                           request.provider, config=session_config)
+
         source_chunks = {}
         for i, metadata in enumerate(metadatas_list):
             if metadata and metadata.get("source"):
@@ -705,13 +933,18 @@ async def query_documents(request: QueryRequest, x_session_id: Optional[str] = H
                 chunk_index = metadata.get("chunk_index", i)
                 if source_url not in source_chunks:
                     source_chunks[source_url] = []
-                source_chunks[source_url].append({"index": chunk_index, "content": documents[i][:200] + "..." if len(documents[i]) > 200 else documents[i]})
-        
-        sources = [{"url": url, "used_chunks": chunks} for url, chunks in source_chunks.items()]
+                source_chunks[source_url].append(
+                    {"index": chunk_index, "content": documents[i][:200] + "..." if len(documents[i]) > 200 else documents[i]})
+
+        sources = [{"url": url, "used_chunks": chunks}
+                   for url, chunks in source_chunks.items()]
         return {"answer": answer, "sources": sources, "chunks_used": len(documents), "session_id": x_session_id}
-    except HTTPException:
+    except HTTPException as he:
+        logger.error(f"HTTPException in query: {he.detail}")
         raise
     except Exception as e:
+        logger.error(f"Unexpected error in query: {str(e)}")
+        logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Query failed: {str(e)}")
 
 
@@ -723,10 +956,12 @@ async def get_database_stats(x_session_id: Optional[str] = Header(None)):
         session_db = session_manager.get_session(x_session_id)
         if not session_db:
             return {"total_documents": 0, "total_chunks": 0, "collections": [], "message": "Session expired"}
-        unique_sources = {metadata.get("source") for metadata in session_db.metadatas if metadata and metadata.get("source")}
+        unique_sources = {metadata.get(
+            "source") for metadata in session_db.metadatas if metadata and metadata.get("source")}
         return {"total_documents": len(unique_sources), "total_chunks": session_db.count(), "collections": ["knowledge_base"], "session_id": x_session_id}
     except:
         return {"total_documents": 0, "total_chunks": 0, "collections": []}
+
 
 @app.get("/api/v1/database/sources")
 async def list_sources(x_session_id: Optional[str] = Header(None)):
@@ -741,7 +976,8 @@ async def list_sources(x_session_id: Optional[str] = Header(None)):
             if metadata and metadata.get("source"):
                 source = metadata["source"]
                 source_counts[source] = source_counts.get(source, 0) + 1
-        sources = [{"url": source, "chunks": count} for source, count in source_counts.items()]
+        sources = [{"url": source, "chunks": count}
+                   for source, count in source_counts.items()]
         return {"sources": sources, "session_id": x_session_id}
     except:
         return {"sources": []}
@@ -751,33 +987,38 @@ async def list_sources(x_session_id: Optional[str] = Header(None)):
 async def get_source_chunks(url: str, x_session_id: Optional[str] = Header(None)):
     try:
         if not url:
-            raise HTTPException(status_code=400, detail="URL parameter required")
+            raise HTTPException(
+                status_code=400, detail="URL parameter required")
         if not x_session_id:
             raise HTTPException(status_code=400, detail="Session ID required")
         session_db = session_manager.get_session(x_session_id)
         if not session_db:
             raise HTTPException(status_code=404, detail="Session expired")
-        chunks = [{"content": session_db.documents[i], "metadata": metadata, "index": i} for i, metadata in enumerate(session_db.metadatas) if metadata and metadata.get("source") == url]
+        chunks = [{"content": session_db.documents[i], "metadata": metadata, "index": i}
+                  for i, metadata in enumerate(session_db.metadatas) if metadata and metadata.get("source") == url]
         if not chunks:
-            raise HTTPException(status_code=404, detail=f"Source not found: {url}")
+            raise HTTPException(
+                status_code=404, detail=f"Source not found: {url}")
         return {"url": url, "total_chunks": len(chunks), "chunks": chunks, "session_id": x_session_id}
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to retrieve chunks: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to retrieve chunks: {str(e)}")
 
 
 @app.delete("/api/v1/database/source")
 async def delete_source(url: str, x_session_id: Optional[str] = Header(None)):
     try:
         if not url:
-            raise HTTPException(status_code=400, detail="URL parameter required")
+            raise HTTPException(
+                status_code=400, detail="URL parameter required")
         if not x_session_id:
             raise HTTPException(status_code=400, detail="Session ID required")
         session_db = session_manager.get_session(x_session_id)
         if not session_db:
             raise HTTPException(status_code=404, detail="Session expired")
-        
+
         indices_to_keep = []
         deleted_count = 0
         for i, metadata in enumerate(session_db.metadatas):
@@ -785,43 +1026,51 @@ async def delete_source(url: str, x_session_id: Optional[str] = Header(None)):
                 deleted_count += 1
             else:
                 indices_to_keep.append(i)
-        
+
         if deleted_count == 0:
-            raise HTTPException(status_code=404, detail=f"Source not found: {url}")
-        
+            raise HTTPException(
+                status_code=404, detail=f"Source not found: {url}")
+
         new_documents = [session_db.documents[i] for i in indices_to_keep]
         new_metadatas = [session_db.metadatas[i] for i in indices_to_keep]
-        
+
         if indices_to_keep:
             if not faiss:
-                raise HTTPException(status_code=500, detail="FAISS not available")
+                raise HTTPException(
+                    status_code=500, detail="FAISS not available")
             if not session_db.index:
-                raise HTTPException(status_code=500, detail="Index not initialized")
-            
+                raise HTTPException(
+                    status_code=500, detail="Index not initialized")
+
             kept_embeddings = []
             for i in indices_to_keep:
-                vec = np.zeros(session_db.index.d, dtype=np.float32)  # type: ignore
+                vec = np.zeros(session_db.index.d,
+                               dtype=np.float32)  # type: ignore
                 session_db.index.reconstruct(i, vec)  # type: ignore
                 kept_embeddings.append(vec)
-            
+
             embeddings_array = np.array(kept_embeddings, dtype=np.float32)
             actual_dimension = embeddings_array.shape[1]
-            session_db.index = faiss.IndexFlatL2(actual_dimension)  # type: ignore
+            session_db.index = faiss.IndexFlatL2(
+                actual_dimension)  # type: ignore
             session_db.dimension = actual_dimension
             session_db.index.add(embeddings_array)  # type: ignore
         else:
             if not faiss:
-                raise HTTPException(status_code=500, detail="FAISS not available")
-            session_db.index = faiss.IndexFlatL2(session_db.dimension)  # type: ignore
-        
+                raise HTTPException(
+                    status_code=500, detail="FAISS not available")
+            session_db.index = faiss.IndexFlatL2(
+                session_db.dimension)  # type: ignore
+
         session_db.documents = new_documents
         session_db.metadatas = new_metadatas
-        
+
         return {"message": f"Deleted {deleted_count} chunks", "deleted_chunks": deleted_count, "remaining_chunks": len(new_documents), "source": url, "session_id": x_session_id}
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to delete: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to delete: {str(e)}")
 
 
 @app.post("/api/v1/database/clear")
@@ -837,7 +1086,9 @@ async def clear_database(x_session_id: Optional[str] = Header(None)):
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to clear: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to clear: {str(e)}")
+
 
 @app.get("/api/v1/session/info")
 async def get_session_info(x_session_id: Optional[str] = Header(None)):
@@ -849,7 +1100,9 @@ async def get_session_info(x_session_id: Optional[str] = Header(None)):
             return {"session_id": x_session_id, "exists": False, "message": "Session expired"}
         return {"session_id": x_session_id, "exists": True, **stats}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get session info: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get session info: {str(e)}")
+
 
 @app.delete("/api/v1/session")
 async def delete_session(x_session_id: Optional[str] = Header(None)):
@@ -863,7 +1116,8 @@ async def delete_session(x_session_id: Optional[str] = Header(None)):
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to delete session: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to delete session: {str(e)}")
 
 
 if __name__ == "__main__":
