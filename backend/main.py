@@ -109,11 +109,14 @@ DEFAULT_CONFIG = {
     "ollama_model": os.getenv("OLLAMA_MODEL", "llama3:8b"),
     "embedding_model_name": os.getenv("EMBEDDING_MODEL_NAME", "BAAI/bge-large-en-v1.5"),
     "openai_api_key": os.getenv("OPENAI_API_KEY", ""),
+    "openai_api_base_url": os.getenv("OPENAI_API_BASE_URL", "https://api.openai.com/v1"),
     "openai_model": os.getenv("OPENAI_MODEL", "gpt-4"),
     "openai_embedding_model": os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small"),
     "gemini_api_key": os.getenv("GEMINI_API_KEY", ""),
+    "gemini_api_base_url": os.getenv("GEMINI_API_BASE_URL", "https://generativelanguage.googleapis.com/v1beta"),
     "gemini_model": os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
     "gemini_embedding_model": os.getenv("GEMINI_EMBEDDING_MODEL", "models/text-embedding-004"),
+    "system_prompt": os.getenv("SYSTEM_PROMPT", "You are a helpful assistant that answers questions based on provided context. Be accurate, concise, and cite sources when possible."),
     "chunk_size": int(os.getenv("CHUNK_SIZE", "1000")),
     "chunk_overlap": int(os.getenv("CHUNK_OVERLAP", "200")),
     "top_k_results": int(os.getenv("TOP_K_RESULTS", "5")),
@@ -371,28 +374,29 @@ def get_embeddings(texts: List[str], provider: str = "opensource", task_type: st
 
     elif provider == "gemini":
         try:
-            import google.generativeai as genai
+            from google import genai  # type: ignore
+            from google.genai import types  # type: ignore
         except ImportError:
             raise HTTPException(
-                status_code=500, detail="google-generativeai not installed")
+                status_code=500, detail="google-genai not installed")
 
         api_key = active_config.get("gemini_api_key")
         if not api_key:
             raise HTTPException(
                 status_code=400, detail="Gemini API key not configured")
 
-        genai.configure(api_key=api_key)
+        client = genai.Client(api_key=api_key)
         embedding_model = active_config.get(
             "gemini_embedding_model", "models/text-embedding-004")
         embeddings = []
-        batch_size = 50
 
-        for i in range(0, len(texts), batch_size):
-            batch = texts[i:i + batch_size]
-            for text in batch:
-                result = genai.embed_content(
-                    model=embedding_model, content=text, task_type=task_type)
-                embeddings.append(result['embedding'])
+        # Process texts individually (google-genai doesn't support batch embedding in current version)
+        for text in texts:
+            result = client.models.embed_content(
+                model=embedding_model,
+                contents=text
+            )
+            embeddings.append(result.embeddings[0].values)
         return embeddings
 
     else:
@@ -520,6 +524,11 @@ def chunk_text(text: str, chunk_size: int = 1000, overlap: int = 200) -> List[st
 
 def query_llm(prompt: str, context: str, provider: str, config: Optional[Dict[str, Any]] = None) -> str:
     active_config = config if config else CURRENT_CONFIG
+    system_prompt = active_config.get(
+        "system_prompt",
+        "You are a helpful assistant that answers questions based on provided context. Be accurate, concise, and cite sources when possible."
+    )
+
     full_prompt = f"""Based on the following context, answer the question accurately and concisely.
 
 Context:
@@ -534,8 +543,10 @@ Answer:"""
             "ollama_base_url", "http://localhost:11434")
         model = active_config.get("ollama_model", "llama3:8b")
         try:
+            # Ollama doesn't have a separate system message, so prepend it to the prompt
+            ollama_prompt = f"{system_prompt}\n\n{full_prompt}"
             response = requests.post(f"{ollama_url}/api/generate", json={
-                                     "model": model, "prompt": full_prompt, "stream": False}, timeout=120)
+                                     "model": model, "prompt": ollama_prompt, "stream": False}, timeout=120)
             response.raise_for_status()
             result = response.json().get("response", "")
             return result if result else "No response generated"
@@ -554,13 +565,15 @@ Answer:"""
             raise HTTPException(
                 status_code=400, detail="OpenAI API key not configured")
 
-        client = openai.OpenAI(api_key=api_key)
+        api_base_url = active_config.get(
+            "openai_api_base_url", "https://api.openai.com/v1")
+        client = openai.OpenAI(api_key=api_key, base_url=api_base_url)
         model = active_config.get("openai_model", "gpt-4")
         try:
             response = client.chat.completions.create(
                 model=model,
                 messages=[
-                    {"role": "system", "content": "You are a helpful assistant that answers questions based on provided context."},
+                    {"role": "system", "content": system_prompt},
                     {"role": "user", "content": full_prompt}
                 ],
                 temperature=0.7,
@@ -574,30 +587,29 @@ Answer:"""
 
     elif provider == "gemini":
         try:
-            import google.generativeai as genai
+            from google import genai  # type: ignore
         except ImportError:
             raise HTTPException(
-                status_code=500, detail="google-generativeai not installed")
+                status_code=500, detail="google-genai not installed")
 
         api_key = active_config.get("gemini_api_key")
         if not api_key:
             raise HTTPException(
                 status_code=400, detail="Gemini API key not configured")
 
-        genai.configure(api_key=api_key)
-        model_name = active_config.get("gemini_model", "gemini-pro")
+        client = genai.Client(api_key=api_key)
+        model_name = active_config.get("gemini_model", "gemini-2.0-flash-exp")
 
         try:
-            model = genai.GenerativeModel(model_name)
-            response = model.generate_content(full_prompt)
+            # Gemini doesn't have a separate system message in generate_content, so prepend it
+            gemini_prompt = f"{system_prompt}\n\n{full_prompt}"
+            response = client.models.generate_content(
+                model=model_name,
+                contents=gemini_prompt
+            )
 
             # Handle blocked or empty responses
-            if not response or not hasattr(response, 'text') or not response.text:
-                if hasattr(response, 'prompt_feedback'):
-                    raise HTTPException(
-                        status_code=400,
-                        detail=f"Content blocked by Gemini: {response.prompt_feedback}"
-                    )
+            if not response or not response.text:
                 raise HTTPException(
                     status_code=500, detail="Gemini returned empty response")
 
@@ -649,9 +661,11 @@ class Configuration(BaseModel):
     ollama_model: str
     embedding_model_name: str
     openai_api_key: Optional[str] = ""
+    openai_api_base_url: str
     openai_model: str
     openai_embedding_model: str
     gemini_api_key: Optional[str] = ""
+    gemini_api_base_url: str
     gemini_model: str
     gemini_embedding_model: str
     chunk_size: int
@@ -895,10 +909,16 @@ async def query_documents(request: QueryRequest, x_session_id: Optional[str] = H
         top_k = session_config.get("top_k_results", 5)
         logger.info(f"Searching with top_k={top_k}")
         results = session_db.search(query_embedding, k=top_k)
-        logger.info(
-            f"Retrieved {len(results.get('documents', [[]])[0])} chunks from vector DB")
 
-        if not results or not results.get("documents") or not results["documents"][0]:
+        # Check if results exist before accessing
+        if not results or not results.get("documents") or not results["documents"] or not results["documents"][0]:
+            logger.warning("No documents found in vector DB search results")
+            return {"answer": "I don't have enough information to answer. Please ingest relevant documentation first.", "sources": []}
+
+        logger.info(
+            f"Retrieved {len(results['documents'][0])} chunks from vector DB")
+
+        if not results["documents"][0]:
             return {"answer": "I don't have enough information to answer. Please ingest relevant documentation first.", "sources": []}
 
         documents = results["documents"][0]
