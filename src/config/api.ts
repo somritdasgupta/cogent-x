@@ -25,6 +25,7 @@ export const API_ENDPOINTS = {
   DATABASE_SOURCES: "/api/v1/database/sources",
   DATABASE_CLEAR: "/api/v1/database/clear",
   DATABASE_SOURCE: "/api/v1/database/source",
+  DATABASE_SOURCE_DELETE: "/api/v1/database/source",
   DATABASE_SOURCE_CHUNKS: "/api/v1/database/source/chunks",
   ASK: "/api/v1/ask",
   SESSION_INFO: "/api/v1/session/info",
@@ -37,14 +38,17 @@ export const buildApiUrl = (endpoint: string): string => {
   return `${cleanBaseUrl}${endpoint}`;
 };
 
-export const buildApiUrlWithParams = (endpoint: string, params: Record<string, string>): string => {
+export const buildApiUrlWithParams = (
+  endpoint: string,
+  params: Record<string, string>,
+): string => {
   const url = buildApiUrl(endpoint);
   const queryString = new URLSearchParams(params).toString();
   return `${url}${queryString ? `?${queryString}` : ""}`;
 };
 
 export const getApiHeaders = (): Record<string, string> => {
-  return {"Content-Type": "application/json", "X-Session-Id": getSessionId()};
+  return { "Content-Type": "application/json", "X-Session-Id": getSessionId() };
 };
 
 export const processApiResponse = (response: Response): void => {
@@ -52,17 +56,21 @@ export const processApiResponse = (response: Response): void => {
   if (sessionId) setSessionId(sessionId);
 };
 
-export const apiRequest = async (endpoint: string, options: RequestInit = {}, customSessionId?: string): Promise<Response> => {
+export const apiRequest = async (
+  endpoint: string,
+  options: RequestInit = {},
+  customSessionId?: string,
+): Promise<Response> => {
   const url = buildApiUrl(endpoint);
   const headers = new Headers(options.headers);
   headers.set("X-Session-Id", customSessionId || getSessionId());
-  
+
   try {
-    const response = await fetch(url, {...options, headers});
+    const response = await fetch(url, { ...options, headers });
     if (!customSessionId) processApiResponse(response);
     return response;
   } catch (error) {
-    if ((error as Error).name === 'AbortError') {
+    if ((error as Error).name === "AbortError") {
       console.warn(`[API] Request aborted for ${endpoint}`);
     } else {
       console.error(`[API] Request failed for ${endpoint}:`, error);
@@ -71,27 +79,42 @@ export const apiRequest = async (endpoint: string, options: RequestInit = {}, cu
   }
 };
 
-export const apiGet = async (endpoint: string, sessionId?: string): Promise<Response> => apiRequest(endpoint, {method: "GET"}, sessionId);
+export const apiGet = async (
+  endpoint: string,
+  sessionId?: string,
+): Promise<Response> => apiRequest(endpoint, { method: "GET" }, sessionId);
 
-export const apiPost = async (endpoint: string, data?: unknown, signalOrSessionId?: AbortSignal | string): Promise<Response> => {
+export const apiPost = async (
+  endpoint: string,
+  data?: unknown,
+  signalOrSessionId?: AbortSignal | string,
+): Promise<Response> => {
   const isSignal = signalOrSessionId instanceof AbortSignal;
   const sessionId = isSignal ? undefined : signalOrSessionId;
   const signal = isSignal ? signalOrSessionId : undefined;
-  
-  return apiRequest(endpoint, {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: data ? JSON.stringify(data) : undefined,
-    signal,
-  }, sessionId);
+
+  return apiRequest(
+    endpoint,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: data ? JSON.stringify(data) : undefined,
+      signal,
+    },
+    sessionId,
+  );
 };
 
-export const apiPut = async (endpoint: string, data?: unknown): Promise<Response> => {
+export const apiPut = async (
+  endpoint: string,
+  data?: unknown,
+): Promise<Response> => {
   return apiRequest(endpoint, {
     method: "PUT",
-    headers: {"Content-Type": "application/json"},
+    headers: { "Content-Type": "application/json" },
     body: data ? JSON.stringify(data) : undefined,
   });
 };
 
-export const apiDelete = async (endpoint: string): Promise<Response> => apiRequest(endpoint, {method: "DELETE"});
+export const apiDelete = async (endpoint: string): Promise<Response> =>
+  apiRequest(endpoint, { method: "DELETE" });

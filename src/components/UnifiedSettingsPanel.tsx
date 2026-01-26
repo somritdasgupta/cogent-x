@@ -139,6 +139,7 @@ export const UnifiedSettingsPanel = ({
     vectorDB: false,
   });
   const isMountedRef = useRef(false);
+  const allowCloseRef = useRef(false);
 
   const [isMobile, setIsMobile] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
@@ -213,6 +214,16 @@ export const UnifiedSettingsPanel = ({
     total_chunks: 0,
   });
   const { toast } = useToast();
+
+  // Controlled close function - only this can close the modal
+  const closeModal = useCallback(() => {
+    allowCloseRef.current = true;
+    setIsOpen(false);
+    // Reset flag after state update
+    setTimeout(() => {
+      allowCloseRef.current = false;
+    }, 100);
+  }, []);
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 768);
@@ -804,6 +815,7 @@ export const UnifiedSettingsPanel = ({
                     </div>
                   ))}
                   <Button
+                    type="button"
                     variant="outline"
                     size="sm"
                     onClick={fetchAll}
@@ -841,59 +853,8 @@ export const UnifiedSettingsPanel = ({
                       </div>
                     </div>
                   </div>
-                  <SessionInfo />
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button
-                        variant="destructive"
-                        className="w-full bg-red-600 hover:bg-red-700"
-                      >
-                        <Trash2 className="h-4 w-4 mr-2" />
-                        Clear All Data
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent className="bg-slate-900 border-slate-700">
-                      <AlertDialogHeader>
-                        <AlertDialogTitle className="text-sky-400">
-                          Clear All Data?
-                        </AlertDialogTitle>
-                        <AlertDialogDescription className="text-slate-300">
-                          This will permanently delete all documents and chunks
-                          from your knowledge base. This action cannot be
-                          undone.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel className="bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700">
-                          Cancel
-                        </AlertDialogCancel>
-                        <AlertDialogAction
-                          className="bg-red-600 text-white hover:bg-red-700"
-                          onClick={async () => {
-                            try {
-                              await apiPost(API_ENDPOINTS.DATABASE_CLEAR);
-                              fetchAll();
-                              toast({
-                                title: "Data Cleared",
-                                description: "All documents have been removed",
-                                className:
-                                  "border-green-500/50 bg-green-50 dark:bg-green-950/30",
-                              });
-                            } catch {
-                              toast({
-                                title: "Clear Failed",
-                                description:
-                                  "Unable to clear data. Please try again.",
-                                variant: "destructive",
-                              });
-                            }
-                          }}
-                        >
-                          Clear Data
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
+
+                  <SessionInfo onRefresh={fetchAll} />
                 </CardContent>
               </Card>
             </TabsContent>
@@ -965,6 +926,13 @@ export const UnifiedSettingsPanel = ({
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4 pt-6">
+                  <Alert className="bg-sky-950/30 border-sky-500/30">
+                    <Shield className="h-4 w-4 text-sky-400" />
+                    <AlertDescription className="text-xs text-slate-300">
+                      API keys are session-only and never shared between users
+                      or saved to disk for security.
+                    </AlertDescription>
+                  </Alert>
                   <div className="space-y-2">
                     <Label className="text-slate-300">API Key</Label>
                     <div className="relative">
@@ -1057,6 +1025,13 @@ export const UnifiedSettingsPanel = ({
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4 pt-6">
+                  <Alert className="bg-sky-950/30 border-sky-500/30">
+                    <Shield className="h-4 w-4 text-sky-400" />
+                    <AlertDescription className="text-xs text-slate-300">
+                      API keys are session-only and never shared between users
+                      or saved to disk for security.
+                    </AlertDescription>
+                  </Alert>
                   <div className="space-y-2">
                     <Label className="text-slate-300">API Key</Label>
                     <div className="relative">
@@ -1345,7 +1320,8 @@ export const UnifiedSettingsPanel = ({
           <div className="sticky bottom-0 pt-8 pb-6 mt-8">
             {activeTab === "rag" && status.llm && status.vectorDB ? (
               <Button
-                onClick={() => setIsOpen(false)}
+                type="button"
+                onClick={closeModal}
                 className="w-full h-12 bg-sky-500 hover:bg-sky-600 text-slate-950 font-bold shadow-2xl shadow-sky-500/40 rounded-xl"
                 size="lg"
               >
@@ -1354,6 +1330,7 @@ export const UnifiedSettingsPanel = ({
               </Button>
             ) : (
               <Button
+                type="button"
                 onClick={handleSave}
                 disabled={isSaving}
                 className="w-full h-12 bg-sky-500 hover:bg-sky-600 text-slate-950 font-bold shadow-2xl shadow-sky-500/40 rounded-xl disabled:opacity-50"
@@ -1382,8 +1359,22 @@ export const UnifiedSettingsPanel = ({
 
   if (isMobile) {
     return (
-      <Drawer open={isOpen} onOpenChange={setIsOpen}>
-        <DrawerTrigger asChild>{children || defaultTrigger}</DrawerTrigger>
+      <Drawer
+        open={isOpen}
+        onOpenChange={(open) => {
+          if (!open && !allowCloseRef.current) {
+            // Block close unless explicitly allowed
+            return;
+          }
+          setIsOpen(open);
+        }}
+        modal={true}
+        dismissible={true}
+        shouldScaleBackground={false}
+      >
+        <DrawerTrigger asChild onClick={() => setIsOpen(true)}>
+          {children || defaultTrigger}
+        </DrawerTrigger>
         <DrawerContent className="h-[85vh] bg-slate-950 border-slate-800 [&>div:first-child]:bg-slate-400 [&>div:first-child]:h-1.5 [&>div:first-child]:w-[100px]">
           <div className="overflow-y-auto px-4 pb-6 pt-2">{content}</div>
         </DrawerContent>
@@ -1392,8 +1383,20 @@ export const UnifiedSettingsPanel = ({
   }
 
   return (
-    <Sheet open={isOpen} onOpenChange={setIsOpen}>
-      <SheetTrigger asChild>{children || defaultTrigger}</SheetTrigger>
+    <Sheet
+      open={isOpen}
+      onOpenChange={(open) => {
+        if (!open && !allowCloseRef.current) {
+          // Block close unless explicitly allowed via closeModal()
+          return;
+        }
+        setIsOpen(open);
+      }}
+      modal={true}
+    >
+      <SheetTrigger asChild onClick={() => setIsOpen(true)}>
+        {children || defaultTrigger}
+      </SheetTrigger>
       <SheetContent
         side="left"
         className="w-full sm:max-w-3xl overflow-y-auto bg-slate-950 border-slate-800 rounded-tr-2xl rounded-br-2xl"

@@ -43,6 +43,8 @@ import {
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { API_ENDPOINTS, apiPost, apiGet, getApiDocsUrl } from "@/config/api";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -102,6 +104,8 @@ const QueryInterface = () => {
   } | null>(null);
   const [isConfigured, setIsConfigured] = useState(false);
   const [hasDocuments, setHasDocuments] = useState(false);
+  const [availableDocuments, setAvailableDocuments] = useState<string[]>([]);
+  const [selectedDocuments, setSelectedDocuments] = useState<string[]>([]);
   const [systemStatus, setSystemStatus] = useState({
     backend: false,
     llm: false,
@@ -129,7 +133,38 @@ const QueryInterface = () => {
   // Save messages to localStorage whenever they change
   useEffect(() => {
     localStorage.setItem("chat_messages", JSON.stringify(messages));
-  }, [messages]);
+
+    // Also update the conversation in chat history if it exists
+    if (messages.length > 0 && currentConversationId) {
+      const conversations = JSON.parse(
+        localStorage.getItem("chat_history") || "[]",
+      );
+
+      const existingIndex = conversations.findIndex(
+        (c: ChatConversation) => c.conversationId === currentConversationId,
+      );
+
+      if (existingIndex >= 0) {
+        const firstUserMessage = messages.find((m) => m.role === "user");
+        const preview = firstUserMessage
+          ? firstUserMessage.content.substring(0, 50) +
+            (firstUserMessage.content.length > 50 ? "..." : "")
+          : "New conversation";
+
+        conversations[existingIndex] = {
+          ...conversations[existingIndex],
+          messages: [...messages],
+          preview: preview,
+          timestamp: new Date().toISOString(),
+        };
+
+        localStorage.setItem(
+          "chat_history",
+          JSON.stringify(conversations.slice(0, 50)),
+        );
+      }
+    }
+  }, [messages, currentConversationId]);
 
   const copyToClipboard = async (content: string, messageId: string) => {
     try {
@@ -213,6 +248,16 @@ const QueryInterface = () => {
           setHasDocuments(docsExist);
         }
       }
+
+      // Fetch available documents
+      const kbResponse = await apiGet(API_ENDPOINTS.KNOWLEDGE_BASES);
+      if (kbResponse.ok) {
+        const kbData = await kbResponse.json();
+        const docs = kbData.knowledge_bases || [];
+        if (JSON.stringify(docs) !== JSON.stringify(availableDocuments)) {
+          setAvailableDocuments(docs);
+        }
+      }
     } catch {
       const offline = { backend: false, llm: false, vectorDB: false };
       if (JSON.stringify(offline) !== JSON.stringify(systemStatus)) {
@@ -220,7 +265,7 @@ const QueryInterface = () => {
       }
       if (hasDocuments) setHasDocuments(false);
     }
-  }, [systemStatus, hasDocuments]);
+  }, [systemStatus, hasDocuments, availableDocuments]);
 
   const handleQuerySubmission = useCallback(
     async (e: FormEvent | React.MouseEvent, promptText?: string) => {
@@ -290,6 +335,8 @@ const QueryInterface = () => {
           query: queryText,
           provider: aiProviderRef.current,
           conversation_id: currentConversationId,
+          selected_documents:
+            selectedDocuments.length > 0 ? selectedDocuments : null,
         });
         if (!response.ok) {
           const errorText = await response.text();
@@ -339,6 +386,7 @@ const QueryInterface = () => {
       currentConversationId,
       toast,
       isProcessing,
+      selectedDocuments,
     ],
   );
 
@@ -474,11 +522,8 @@ const QueryInterface = () => {
                           <button
                             key={conv.id}
                             onClick={() => {
-                              // Only save current if it has messages and is different from the one being loaded
-                              if (
-                                messages.length > 0 &&
-                                messages[0]?.id !== conv.messages[0]?.id
-                              ) {
+                              // Save current conversation before switching
+                              if (messages.length > 0) {
                                 const conversations = JSON.parse(
                                   localStorage.getItem("chat_history") || "[]",
                                 );
@@ -487,27 +532,43 @@ const QueryInterface = () => {
                                     .find((m) => m.role === "user")
                                     ?.content.substring(0, 50) ||
                                   "New conversation";
-                                // Check if current chat already exists in history
-                                const exists = conversations.some(
+
+                                // Find and update existing conversation or create new
+                                const existingIndex = conversations.findIndex(
                                   (c: ChatConversation) =>
-                                    c.preview === currentPreview,
+                                    c.conversationId === currentConversationId,
                                 );
-                                if (!exists) {
-                                  conversations.unshift({
-                                    id: Date.now().toString(),
-                                    timestamp: new Date().toISOString(),
-                                    messages: messages,
-                                    preview: currentPreview,
-                                  });
-                                  localStorage.setItem(
-                                    "chat_history",
-                                    JSON.stringify(conversations.slice(0, 50)),
-                                  );
+
+                                const updatedConv = {
+                                  id:
+                                    existingIndex >= 0
+                                      ? conversations[existingIndex].id
+                                      : Date.now().toString(),
+                                  timestamp: new Date().toISOString(),
+                                  messages: [...messages],
+                                  preview: currentPreview,
+                                  conversationId: currentConversationId,
+                                };
+
+                                if (existingIndex >= 0) {
+                                  conversations[existingIndex] = updatedConv;
+                                } else {
+                                  conversations.unshift(updatedConv);
                                 }
+
+                                localStorage.setItem(
+                                  "chat_history",
+                                  JSON.stringify(conversations.slice(0, 50)),
+                                );
                               }
+
+                              // Load the selected conversation
                               setMessages(conv.messages);
                               setCurrentConversationId(
                                 conv.conversationId || conv.id,
+                              );
+                              setConversationTitle(
+                                conv.preview || "Conversation",
                               );
                               localStorage.setItem(
                                 "chat_messages",
@@ -609,36 +670,42 @@ const QueryInterface = () => {
                   localStorage.getItem("chat_history") || "[]",
                 );
 
-                // Check if this exact conversation ID already exists
-                const alreadyExists = conversations.some(
+                // Find existing conversation and update it, or create new
+                const existingIndex = conversations.findIndex(
                   (c: ChatConversation) =>
                     c.conversationId === currentConversationId,
                 );
 
-                // Only save if NOT already in history
-                if (!alreadyExists) {
-                  const firstUserMessage = messages.find(
-                    (m) => m.role === "user",
-                  );
-                  const preview = firstUserMessage
-                    ? firstUserMessage.content.substring(0, 50) +
-                      (firstUserMessage.content.length > 50 ? "..." : "")
-                    : "New conversation";
+                const firstUserMessage = messages.find(
+                  (m) => m.role === "user",
+                );
+                const preview = firstUserMessage
+                  ? firstUserMessage.content.substring(0, 50) +
+                    (firstUserMessage.content.length > 50 ? "..." : "")
+                  : "New conversation";
 
-                  conversations.unshift({
-                    id: Date.now().toString(),
-                    timestamp: new Date().toISOString(),
-                    messages: [...messages], // Clone to avoid reference issues
-                    preview: preview,
-                    conversationId: currentConversationId,
-                  });
+                const updatedConv = {
+                  id:
+                    existingIndex >= 0
+                      ? conversations[existingIndex].id
+                      : Date.now().toString(),
+                  timestamp: new Date().toISOString(),
+                  messages: [...messages],
+                  preview: preview,
+                  conversationId: currentConversationId,
+                };
 
-                  localStorage.setItem(
-                    "chat_history",
-                    JSON.stringify(conversations.slice(0, 50)),
-                  );
-                  setChatHistoryUpdate((prev) => prev + 1);
+                if (existingIndex >= 0) {
+                  conversations[existingIndex] = updatedConv;
+                } else {
+                  conversations.unshift(updatedConv);
                 }
+
+                localStorage.setItem(
+                  "chat_history",
+                  JSON.stringify(conversations.slice(0, 50)),
+                );
+                setChatHistoryUpdate((prev) => prev + 1);
               }
 
               // Generate new conversation ID FIRST
@@ -876,9 +943,105 @@ const QueryInterface = () => {
                             <Sparkles className="w-4 h-4 text-white" />
                           </div>
                           <div className="flex-1 max-w-[85%] md:max-w-[70%] lg:max-w-[60%]">
-                            <div className="bg-muted/50 rounded-2xl rounded-tl-sm px-4 py-3 shadow-sm">
-                              <div className="prose prose-sm dark:prose-invert max-w-none prose-p:text-[15px] prose-p:leading-relaxed prose-p:my-1.5 prose-headings:font-bold prose-headings:mt-3 prose-headings:mb-1.5 prose-strong:font-bold prose-code:bg-background prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-sm prose-pre:bg-background prose-pre:border prose-pre:border-border prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5">
-                                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                            <div className="bg-muted/50 rounded-2xl rounded-tl-sm px-4 py-3 shadow-sm overflow-hidden">
+                              <div
+                                className="prose prose-sm dark:prose-invert max-w-none break-words
+                                prose-p:text-[15px] prose-p:leading-relaxed prose-p:my-1.5 prose-p:break-words
+                                prose-headings:font-bold prose-headings:mt-3 prose-headings:mb-1.5 prose-headings:break-words
+                                prose-strong:font-bold prose-strong:text-sky-300
+                                prose-code:bg-slate-800 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-sm prose-code:text-sky-300 prose-code:before:content-[''] prose-code:after:content-[''] prose-code:break-all
+                                prose-pre:bg-slate-900 prose-pre:border prose-pre:border-slate-700 prose-pre:p-0 prose-pre:my-3 prose-pre:overflow-x-auto
+                                prose-ul:my-2 prose-ul:text-slate-300 prose-ul:break-words prose-ol:my-2 prose-ol:text-slate-300 prose-ol:break-words prose-li:my-0.5 prose-li:break-words
+                                prose-table:border-collapse prose-table:w-full prose-table:my-3 prose-table:overflow-x-auto
+                                prose-th:bg-slate-800 prose-th:border prose-th:border-slate-700 prose-th:px-3 prose-th:py-2 prose-th:text-left prose-th:font-semibold prose-th:text-sky-400
+                                prose-td:border prose-td:border-slate-700 prose-td:px-3 prose-td:py-2 prose-td:text-slate-300 prose-td:break-words
+                                prose-blockquote:border-l-sky-500 prose-blockquote:bg-slate-800/50 prose-blockquote:pl-4 prose-blockquote:py-2 prose-blockquote:italic prose-blockquote:break-words
+                                prose-a:text-sky-400 prose-a:no-underline hover:prose-a:underline prose-a:break-all"
+                              >
+                                <ReactMarkdown
+                                  remarkPlugins={[remarkGfm]}
+                                  components={{
+                                    code(props) {
+                                      const { children, className, ...rest } =
+                                        props;
+                                      const match = /language-(\w+)/.exec(
+                                        className || "",
+                                      );
+                                      const codeContent = String(
+                                        children,
+                                      ).replace(/\n$/, "");
+                                      const isInline = !match && !className;
+
+                                      return !isInline && match ? (
+                                        <div className="relative group my-3">
+                                          <div className="flex items-center justify-between bg-slate-800 px-4 py-2 rounded-t-lg border-b border-slate-700">
+                                            <span className="text-xs font-semibold text-slate-400">
+                                              {match[1]}
+                                            </span>
+                                            <button
+                                              onClick={() => {
+                                                navigator.clipboard.writeText(
+                                                  codeContent,
+                                                );
+                                                toast({
+                                                  title: "Code copied!",
+                                                  description:
+                                                    "Code block copied to clipboard",
+                                                });
+                                              }}
+                                              className="text-xs px-2 py-1 rounded bg-slate-700 hover:bg-slate-600 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity"
+                                            >
+                                              <Copy className="w-3 h-3 inline mr-1" />
+                                              Copy
+                                            </button>
+                                          </div>
+                                          <SyntaxHighlighter
+                                            style={vscDarkPlus}
+                                            language={match[1]}
+                                            PreTag="div"
+                                            className="!mt-0 !rounded-t-none !rounded-b-lg !my-0"
+                                            wrapLines={true}
+                                            wrapLongLines={true}
+                                          >
+                                            {codeContent}
+                                          </SyntaxHighlighter>
+                                        </div>
+                                      ) : (
+                                        <code className={className} {...rest}>
+                                          {children}
+                                        </code>
+                                      );
+                                    },
+                                    table({ children }) {
+                                      return (
+                                        <div className="overflow-x-auto my-3">
+                                          <table className="min-w-full border-collapse">
+                                            {children}
+                                          </table>
+                                        </div>
+                                      );
+                                    },
+                                    p({ children }) {
+                                      return (
+                                        <p className="break-words overflow-wrap-anywhere">
+                                          {children}
+                                        </p>
+                                      );
+                                    },
+                                    a({ children, href }) {
+                                      return (
+                                        <a
+                                          href={href}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="break-all"
+                                        >
+                                          {children}
+                                        </a>
+                                      );
+                                    },
+                                  }}
+                                >
                                   {message.content}
                                 </ReactMarkdown>
                               </div>
@@ -971,6 +1134,49 @@ const QueryInterface = () => {
           {isConfigured && (
             <div className="fixed md:static bottom-0 left-0 right-0 p-4 bg-background/95 backdrop-blur-xl border-t md:border-t-0">
               <div className="w-full max-w-5xl mx-auto px-0 md:px-8 lg:px-12">
+                {/* Document Selector Chips */}
+                {availableDocuments.length > 0 && (
+                  <div className="mb-3 flex flex-wrap gap-2 items-center">
+                    <span className="text-xs text-slate-400 font-medium flex items-center gap-1">
+                      <Database className="w-3 h-3" />
+                      Context:
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedDocuments([])}
+                      className={`text-xs px-2.5 py-1 rounded-full transition-all ${
+                        selectedDocuments.length === 0
+                          ? "bg-sky-500 text-white font-semibold"
+                          : "bg-slate-800 text-slate-400 hover:bg-slate-700 border border-slate-700"
+                      }`}
+                    >
+                      All Documents
+                    </button>
+                    {availableDocuments.map((doc, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => {
+                          setSelectedDocuments((prev) =>
+                            prev.includes(doc)
+                              ? prev.filter((d) => d !== doc)
+                              : [...prev, doc],
+                          );
+                        }}
+                        className={`text-xs px-2.5 py-1 rounded-full transition-all truncate max-w-[200px] ${
+                          selectedDocuments.includes(doc)
+                            ? "bg-sky-500 text-white font-semibold"
+                            : "bg-slate-800 text-slate-400 hover:bg-slate-700 border border-slate-700"
+                        }`}
+                        title={doc}
+                      >
+                        <FileText className="w-3 h-3 inline mr-1" />
+                        {doc}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
                 <form onSubmit={handleQuerySubmission} className="relative">
                   <div className="relative">
                     <div className="absolute -inset-[2px] bg-gradient-to-r from-violet-400 via-purple-400 to-pink-400 rounded-2xl opacity-75 blur-md" />

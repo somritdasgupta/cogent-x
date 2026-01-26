@@ -373,30 +373,52 @@ def get_embeddings(texts: List[str], provider: str = "opensource", task_type: st
         return embeddings
 
     elif provider == "gemini":
-        try:
-            from google import genai  # type: ignore
-            from google.genai import types  # type: ignore
-        except ImportError:
-            raise HTTPException(
-                status_code=500, detail="google-genai not installed")
-
         api_key = active_config.get("gemini_api_key")
         if not api_key:
             raise HTTPException(
                 status_code=400, detail="Gemini API key not configured")
 
-        client = genai.Client(api_key=api_key)
         embedding_model = active_config.get(
             "gemini_embedding_model", "models/text-embedding-004")
-        embeddings = []
 
-        # Process texts individually (google-genai doesn't support batch embedding in current version)
-        for text in texts:
-            result = client.models.embed_content(
-                model=embedding_model,
-                contents=text
+        # Use batch embedding via REST API for efficiency
+        embeddings = []
+        batch_size = 100  # Gemini API supports up to 100 requests per batch
+
+        for i in range(0, len(texts), batch_size):
+            batch = texts[i:i + batch_size]
+
+            # Prepare batch request for REST API
+            requests_payload = [
+                {
+                    "model": embedding_model,
+                    "content": {"parts": [{"text": text}]},
+                    "taskType": task_type.upper().replace("_", "_")
+                }
+                for text in batch
+            ]
+
+            # Call Gemini batch embedding REST API
+            url = f"https://generativelanguage.googleapis.com/v1beta/{embedding_model}:batchEmbedContents"
+            headers = {"Content-Type": "application/json"}
+            payload = {"requests": requests_payload}
+
+            response = requests.post(
+                f"{url}?key={api_key}",
+                headers=headers,
+                json=payload
             )
-            embeddings.append(result.embeddings[0].values)
+
+            if response.status_code != 200:
+                raise HTTPException(
+                    status_code=response.status_code,
+                    detail=f"Gemini API error: {response.text}"
+                )
+
+            result = response.json()
+            embeddings.extend([emb["values"]
+                              for emb in result.get("embeddings", [])])
+
         return embeddings
 
     else:
@@ -526,17 +548,33 @@ def query_llm(prompt: str, context: str, provider: str, config: Optional[Dict[st
     active_config = config if config else CURRENT_CONFIG
     system_prompt = active_config.get(
         "system_prompt",
-        "You are a helpful assistant that answers questions based on provided context. Be accurate, concise, and cite sources when possible."
+        """You are a highly knowledgeable assistant that provides comprehensive, detailed answers based on the provided context.
+
+FORMATTING REQUIREMENTS:
+- Use **Markdown formatting** extensively in your responses
+- Preserve and recreate any **tables** from the context using proper Markdown table syntax
+- Format **code blocks** with appropriate language tags (```python, ```javascript, etc.)
+- Use **bullet points** and **numbered lists** where appropriate
+- Use **bold** and *italic* for emphasis
+- Include **headings** (##, ###) to structure longer answers
+- Preserve any technical details, examples, and data from the context
+
+RESPONSE STYLE:
+- Be thorough and feature-rich in your explanations
+- Include relevant code examples, tables, and structured data from the context
+- Cite specific details and examples from the provided sources
+- If the context contains tables or structured data, reproduce them accurately in Markdown format
+- Maintain technical accuracy and completeness"""
     )
 
-    full_prompt = f"""Based on the following context, answer the question accurately and concisely.
+    full_prompt = f"""Based on the following context, provide a detailed and well-formatted answer.
 
 Context:
 {context}
 
 Question: {prompt}
 
-Answer:"""
+Provide a comprehensive answer using proper Markdown formatting including tables, code blocks, lists, and other formatting as needed:"""
 
     if provider == "opensource":
         ollama_url = active_config.get(
@@ -577,7 +615,7 @@ Answer:"""
                     {"role": "user", "content": full_prompt}
                 ],
                 temperature=0.7,
-                max_tokens=1000
+                max_tokens=2500
             )
             content = response.choices[0].message.content
             return content if content else "No response generated"
@@ -683,6 +721,8 @@ class QueryRequest(BaseModel):
     query: str
     provider: str = "opensource"
     conversation_id: Optional[str] = None
+    # Filter by specific document titles
+    selected_documents: Optional[List[str]] = None
 
 
 # ============= API Endpoints =============
@@ -756,12 +796,22 @@ async def update_configuration(config: Configuration, response: Response, x_sess
             new_config["gemini_api_key"] = current_session_config.get(
                 "gemini_api_key", CURRENT_CONFIG.get("gemini_api_key", ""))
 
-        # Save to BOTH session AND global disk config
+        # SECURITY FIX: Save to session config (session-specific)
         session_manager.set_session_config(session_id, new_config)
-        save_config(new_config)  # Persist to disk
-        CURRENT_CONFIG = new_config.copy()  # Update in-memory global config
 
-        return {"message": "Configuration saved successfully", "persisted": True}
+        # SECURITY FIX: Only save NON-SENSITIVE settings to global disk config
+        # API keys are NEVER saved to disk - they remain session-only
+        global_safe_config = new_config.copy()
+        # Never persist API keys globally
+        global_safe_config["openai_api_key"] = ""
+        # Never persist API keys globally
+        global_safe_config["gemini_api_key"] = ""
+
+        save_config(global_safe_config)  # Persist only safe settings to disk
+        # Update in-memory global config without API keys
+        CURRENT_CONFIG = global_safe_config.copy()
+
+        return {"message": "Configuration saved successfully (API keys are session-only for security)", "persisted": True}
     except Exception as e:
         logger.error(f"Failed to save config: {str(e)}")
         logger.error(traceback.format_exc())
@@ -924,22 +974,44 @@ async def query_documents(request: QueryRequest, x_session_id: Optional[str] = H
         documents = results["documents"][0]
         metadatas_list = results.get("metadatas", [[]])[0]
 
-        # Smart filtering: conversation-specific OR global documents
-        if request.conversation_id:
-            filtered_docs = []
-            filtered_metas = []
-            for doc, meta in zip(documents, metadatas_list):
-                if meta:
-                    conv_id = meta.get("conversation_id")
-                    # Include if: matches conversation OR is global
-                    if conv_id == request.conversation_id or conv_id == "global":
-                        filtered_docs.append(doc)
-                        filtered_metas.append(meta)
-            if not filtered_docs:
-                return {"answer": "No documents found for this conversation. Please ingest documents first.", "sources": []}
-            documents = filtered_docs
-            metadatas_list = filtered_metas
+        # Apply conversation and document filters
+        filtered_docs = []
+        filtered_metas = []
 
+        for doc, meta in zip(documents, metadatas_list):
+            if not meta:
+                continue
+
+            # Get metadata fields
+            doc_conv_id = meta.get("conversation_id", "global")
+            doc_title = meta.get("title")
+
+            # Filter by conversation: include if matches current conversation OR is global
+            conversation_match = (
+                doc_conv_id == "global" or
+                doc_conv_id == request.conversation_id
+            )
+
+            # Filter by selected documents if specified
+            document_match = True
+            if request.selected_documents and len(request.selected_documents) > 0:
+                document_match = doc_title in request.selected_documents
+
+            # Include if both filters pass
+            if conversation_match and document_match:
+                filtered_docs.append(doc)
+                filtered_metas.append(meta)
+
+        # Return appropriate error if no documents found
+        if not filtered_docs:
+            if request.selected_documents and len(request.selected_documents) > 0:
+                return {"answer": f"No matching documents found. Selected: {', '.join(request.selected_documents)}", "sources": []}
+            return {"answer": "No documents found for this conversation. Please ingest documents or switch to 'Global' mode when ingesting.", "sources": []}
+
+        documents = filtered_docs
+        metadatas_list = filtered_metas
+
+        # Build context from filtered documents
         context = "\n\n".join(documents)
         logger.info(
             f"Querying LLM with provider: {request.provider}, context length: {len(context)}")
