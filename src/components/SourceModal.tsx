@@ -1,5 +1,11 @@
-import { useState, useEffect } from "react";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useState, useEffect, useMemo, useCallback } from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -27,21 +33,18 @@ export const SourceModal = ({ url, usedChunks, onClose }: SourceModalProps) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [showOnlyUsed, setShowOnlyUsed] = useState(false);
 
-  const filteredChunks = chunks.filter((chunk) => {
-    const matchesSearch = searchQuery.trim() === "" || chunk.content.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesUsedFilter = !showOnlyUsed || usedChunks.includes(chunk.index);
-    return matchesSearch && matchesUsedFilter;
-  });
+  const filteredChunks = useMemo(() => {
+    return chunks.filter((chunk) => {
+      const matchesSearch =
+        searchQuery.trim() === "" ||
+        chunk.content.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesUsedFilter =
+        !showOnlyUsed || usedChunks.includes(chunk.index);
+      return matchesSearch && matchesUsedFilter;
+    });
+  }, [chunks, searchQuery, showOnlyUsed, usedChunks]);
 
-  useEffect(() => {
-    if (url) {
-      loadChunks(url);
-    } else {
-      setChunks([]);
-    }
-  }, [url]);
-
-  const loadChunks = async (sourceUrl: string) => {
+  const loadChunks = useCallback(async (sourceUrl: string) => {
     setIsLoading(true);
     setChunks([]);
     try {
@@ -55,7 +58,17 @@ export const SourceModal = ({ url, usedChunks, onClose }: SourceModalProps) => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    if (url) {
+      loadChunks(url);
+    } else {
+      setChunks([]);
+      setSearchQuery("");
+      setShowOnlyUsed(false);
+    }
+  }, [url, loadChunks]);
 
   return (
     <Dialog open={url !== null} onOpenChange={(open) => !open && onClose()}>
@@ -81,8 +94,14 @@ export const SourceModal = ({ url, usedChunks, onClose }: SourceModalProps) => {
             <>
               <Separator />
               <div className="flex items-center justify-between">
-                <Label htmlFor="show-used" className="text-sm">Show only used chunks</Label>
-                <Switch id="show-used" checked={showOnlyUsed} onCheckedChange={setShowOnlyUsed} />
+                <Label htmlFor="show-used" className="text-sm">
+                  Show only used chunks
+                </Label>
+                <Switch
+                  id="show-used"
+                  checked={showOnlyUsed}
+                  onCheckedChange={setShowOnlyUsed}
+                />
               </div>
             </>
           )}
@@ -101,24 +120,37 @@ export const SourceModal = ({ url, usedChunks, onClose }: SourceModalProps) => {
                   <CardContent className="pt-4 space-y-3">
                     <div className="flex items-center justify-between">
                       <div className="flex gap-2">
-                        <Badge variant={isUsed ? "default" : "outline"}>Chunk {idx + 1}</Badge>
+                        <Badge variant={isUsed ? "default" : "outline"}>
+                          Chunk {idx + 1}
+                        </Badge>
                         {isUsed && <Badge variant="secondary">Used</Badge>}
                       </div>
-                      <span className="text-xs text-muted-foreground">Index: {chunk.index}</span>
+                      <span className="text-xs text-muted-foreground">
+                        Index: {chunk.index}
+                      </span>
                     </div>
-                    <p className="text-sm whitespace-pre-wrap">{chunk.content}</p>
-                    {chunk.metadata && Object.keys(chunk.metadata).length > 0 && (
-                      <>
-                        <Separator />
-                        <div className="flex flex-wrap gap-2">
-                          {Object.entries(chunk.metadata).map(([key, value]) => (
-                            <Badge key={key} variant="secondary" className="text-xs">
-                              {key}: {value}
-                            </Badge>
-                          ))}
-                        </div>
-                      </>
-                    )}
+                    <p className="text-sm whitespace-pre-wrap">
+                      {chunk.content}
+                    </p>
+                    {chunk.metadata &&
+                      Object.keys(chunk.metadata).length > 0 && (
+                        <>
+                          <Separator />
+                          <div className="flex flex-wrap gap-2">
+                            {Object.entries(chunk.metadata).map(
+                              ([key, value]) => (
+                                <Badge
+                                  key={key}
+                                  variant="secondary"
+                                  className="text-xs"
+                                >
+                                  {key}: {value}
+                                </Badge>
+                              ),
+                            )}
+                          </div>
+                        </>
+                      )}
                   </CardContent>
                 </Card>
               );
@@ -127,7 +159,9 @@ export const SourceModal = ({ url, usedChunks, onClose }: SourceModalProps) => {
             {filteredChunks.length === 0 && !isLoading && (
               <Card>
                 <CardContent className="pt-4 text-center text-sm text-muted-foreground">
-                  {searchQuery.trim() ? "No chunks match your search." : "No chunks found."}
+                  {searchQuery.trim()
+                    ? "No chunks match your search."
+                    : "No chunks found."}
                 </CardContent>
               </Card>
             )}

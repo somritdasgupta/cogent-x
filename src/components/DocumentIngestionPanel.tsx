@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,9 +15,7 @@ export const DocumentIngestionPanel = () => {
   const [isLoadingKB, setIsLoadingKB] = useState(true);
   const { toast } = useToast();
 
-  useEffect(() => { fetchKnowledgeBases(); }, []);
-
-  const fetchKnowledgeBases = async () => {
+  const fetchKnowledgeBases = useCallback(async () => {
     try {
       setIsLoadingKB(true);
       const response = await apiGet(API_ENDPOINTS.KNOWLEDGE_BASES);
@@ -30,28 +28,51 @@ export const DocumentIngestionPanel = () => {
     } finally {
       setIsLoadingKB(false);
     }
-  };
+  }, []);
 
-  const handleIngestion = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!url.trim()) {
-      toast({ title: "Error", description: "Please enter a valid URL", variant: "destructive" });
-      return;
-    }
-    setIsProcessing(true);
-    try {
-      const response = await apiPost(API_ENDPOINTS.INGEST, { url: url.trim() });
-      if (!response.ok) throw new Error("Ingestion failed");
-      const data = await response.json();
-      toast({ title: "Success", description: data.message || "Document ingested successfully" });
-      setUrl("");
-      fetchKnowledgeBases();
-    } catch (error) {
-      toast({ title: "Error", description: "Failed to ingest document", variant: "destructive" });
-    } finally {
-      setIsProcessing(false);
-    }
-  };
+  useEffect(() => {
+    fetchKnowledgeBases();
+  }, [fetchKnowledgeBases]);
+
+  const handleIngestion = useCallback(
+    async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!url.trim()) {
+        toast({
+          title: "Error",
+          description: "Please enter a valid URL",
+          variant: "destructive",
+        });
+        return;
+      }
+      if (isProcessing) return; // Prevent double submissions
+
+      setIsProcessing(true);
+      try {
+        const response = await apiPost(API_ENDPOINTS.INGEST, {
+          url: url.trim(),
+        });
+        if (!response.ok) throw new Error("Ingestion failed");
+        const data = await response.json();
+        toast({
+          title: "Success",
+          description: data.message || "Document ingested successfully",
+          className: "border-green-500/50 bg-green-50 dark:bg-green-950/30",
+        });
+        setUrl("");
+        await fetchKnowledgeBases();
+      } catch (error) {
+        toast({
+          title: "Error",
+          description: "Failed to ingest document",
+          variant: "destructive",
+        });
+      } finally {
+        setIsProcessing(false);
+      }
+    },
+    [url, isProcessing, toast, fetchKnowledgeBases],
+  );
 
   return (
     <Card className="w-full">
@@ -106,12 +127,15 @@ export const DocumentIngestionPanel = () => {
             <div className="flex flex-wrap gap-1.5">
               {knowledgeBases.map((kb, index) => (
                 <Badge
-                  key={index}
+                  key={`${kb}-${index}`}
                   variant="secondary"
-                  className="text-xs flex items-center gap-1.5 px-2 py-1"
+                  className="text-xs flex items-center gap-1.5 px-2 py-1 max-w-full"
                 >
-                  <FileText className="h-3 w-3" />
-                  <span className="truncate max-w-[120px] sm:max-w-[200px]">
+                  <FileText className="h-3 w-3 flex-shrink-0" />
+                  <span
+                    className="truncate max-w-[150px] sm:max-w-[250px]"
+                    title={kb}
+                  >
                     {kb}
                   </span>
                 </Badge>

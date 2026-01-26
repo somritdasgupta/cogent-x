@@ -1,4 +1,11 @@
-import { useState, useEffect, useRef, FormEvent } from "react";
+import {
+  useState,
+  useEffect,
+  useRef,
+  FormEvent,
+  useCallback,
+  useMemo,
+} from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -29,6 +36,10 @@ import {
   MessageSquare,
   Trash2,
   X,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -76,9 +87,15 @@ const QueryInterface = () => {
   const [currentQuery, setCurrentQuery] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
-  const [aiProvider] = useState(
-    () => localStorage.getItem("aiProvider") || "opensource"
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
+    const saved = localStorage.getItem("sidebar_collapsed");
+    return saved === "true";
+  });
+  const aiProviderRef = useRef(
+    localStorage.getItem("aiProvider") || "opensource",
   );
+  const statusCheckRef = useRef<NodeJS.Timeout | null>(null);
+  const configCheckRef = useRef<NodeJS.Timeout | null>(null);
   const [viewingSource, setViewingSource] = useState<{
     url: string;
     usedChunks: number[];
@@ -141,18 +158,23 @@ const QueryInterface = () => {
 
   useEffect(() => {
     const init = async () => {
-      await checkConfiguration(); // Creates session first
-      await checkStatus(); // Uses the session
-    };
-    init();
-    const interval = setInterval(async () => {
       await checkConfiguration();
       await checkStatus();
-    }, 10000); // Reduced from 5s to 10s to minimize re-renders
-    return () => clearInterval(interval);
+    };
+    init();
+
+    // Use refs to store interval IDs for better cleanup
+    configCheckRef.current = setInterval(checkConfiguration, 30000);
+    statusCheckRef.current = setInterval(checkStatus, 30000);
+
+    return () => {
+      if (configCheckRef.current) clearInterval(configCheckRef.current);
+      if (statusCheckRef.current) clearInterval(statusCheckRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const checkConfiguration = async () => {
+  const checkConfiguration = useCallback(async () => {
     try {
       const response = await apiGet(API_ENDPOINTS.CONFIG);
       if (response.ok) {
@@ -167,9 +189,9 @@ const QueryInterface = () => {
     } catch {
       if (isConfigured) setIsConfigured(false);
     }
-  };
+  }, [isConfigured]);
 
-  const checkStatus = async () => {
+  const checkStatus = useCallback(async () => {
     try {
       const [healthResponse, statsResponse] = await Promise.all([
         apiGet(API_ENDPOINTS.HEALTH),
@@ -198,294 +220,489 @@ const QueryInterface = () => {
       }
       if (hasDocuments) setHasDocuments(false);
     }
-  };
+  }, [systemStatus, hasDocuments]);
 
-  const handleQuerySubmission = async (
-    e: FormEvent | React.MouseEvent,
-    promptText?: string
-  ) => {
-    e.preventDefault();
-    const queryText = promptText || currentQuery;
-    if (!queryText.trim() || isProcessing) return;
+  const handleQuerySubmission = useCallback(
+    async (e: FormEvent | React.MouseEvent, promptText?: string) => {
+      e.preventDefault();
+      const queryText = promptText || currentQuery;
+      if (!queryText.trim() || isProcessing) return;
 
-    // Check if configured before allowing query
-    if (!isConfigured) {
-      toast({
-        title: "Setup Required",
-        description: "Please configure your AI provider in Settings first.",
-        variant: "destructive",
-      });
-      return;
-    }
+      // Check if configured before allowing query
+      if (!isConfigured) {
+        toast({
+          title: "Setup Required",
+          description: "Please configure your AI provider in Settings first.",
+          variant: "destructive",
+        });
+        return;
+      }
 
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      role: "user",
-      content: queryText,
-      timestamp: new Date(),
-    };
-    setMessages((prev) => [...prev, userMessage]);
-    setCurrentQuery("");
-    setIsProcessing(true);
+      const userMessage: Message = {
+        id: Date.now().toString(),
+        role: "user",
+        content: queryText,
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, userMessage]);
+      setCurrentQuery("");
+      setIsProcessing(true);
 
-    if (messages.length === 0) {
-      const title =
-        queryText.substring(0, 50) + (queryText.length > 50 ? "..." : "");
-      setConversationTitle(title);
-    }
+      if (messages.length === 0) {
+        const title =
+          queryText.substring(0, 50) + (queryText.length > 50 ? "..." : "");
+        setConversationTitle(title);
 
-    try {
-      const response = await apiPost(API_ENDPOINTS.ASK, {
-        query: queryText,
-        provider: aiProvider,
-        conversation_id: currentConversationId,
-      });
-      if (!response.ok) {
-        const errorText = await response.text();
-        let errorMessage = "Query failed";
-        try {
-          const errorData = JSON.parse(errorText);
-          errorMessage = errorData.detail || errorData.message || errorMessage;
-        } catch {
-          errorMessage = errorText || errorMessage;
+        // Update or create chat history entry for this conversation
+        const conversations = JSON.parse(
+          localStorage.getItem("chat_history") || "[]",
+        );
+
+        const existingIndex = conversations.findIndex(
+          (c: ChatConversation) => c.conversationId === currentConversationId,
+        );
+
+        if (existingIndex >= 0) {
+          // Update existing placeholder with actual title
+          conversations[existingIndex].preview = title;
+          conversations[existingIndex].messages = [userMessage];
+          conversations[existingIndex].timestamp = new Date().toISOString();
+        } else {
+          // Create new entry if somehow doesn't exist
+          conversations.unshift({
+            id: Date.now().toString(),
+            timestamp: new Date().toISOString(),
+            messages: [userMessage],
+            preview: title,
+            conversationId: currentConversationId,
+          });
         }
-        throw new Error(errorMessage);
+
+        localStorage.setItem(
+          "chat_history",
+          JSON.stringify(conversations.slice(0, 50)),
+        );
+        setChatHistoryUpdate((prev) => prev + 1);
       }
-      const data = await response.json();
-      const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content: data.answer,
-        timestamp: new Date(),
-        sources: data.sources || [],
-      };
-      setMessages((prev) => [...prev, assistantMessage]);
-    } catch (error) {
-      let errorContent = "Unable to process query. ";
-      if (error instanceof TypeError && error.message.includes("fetch")) {
-        errorContent += "Cannot connect to backend.";
-      } else if (error instanceof Error) {
-        errorContent += error.message;
+
+      try {
+        const response = await apiPost(API_ENDPOINTS.ASK, {
+          query: queryText,
+          provider: aiProviderRef.current,
+          conversation_id: currentConversationId,
+        });
+        if (!response.ok) {
+          const errorText = await response.text();
+          let errorMessage = "Query failed";
+          try {
+            const errorData = JSON.parse(errorText);
+            errorMessage =
+              errorData.detail || errorData.message || errorMessage;
+          } catch {
+            errorMessage = errorText || errorMessage;
+          }
+          throw new Error(errorMessage);
+        }
+        const data = await response.json();
+        const assistantMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          role: "assistant",
+          content: data.answer,
+          timestamp: new Date(),
+          sources: data.sources || [],
+        };
+        setMessages((prev) => [...prev, assistantMessage]);
+      } catch (error) {
+        let errorContent = "Unable to process query. ";
+        if (error instanceof TypeError && error.message.includes("fetch")) {
+          errorContent += "Cannot connect to backend.";
+        } else if (error instanceof Error) {
+          errorContent += error.message;
+        }
+        const errorMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          role: "assistant",
+          content: errorContent,
+          timestamp: new Date(),
+        };
+        setMessages((prev) => [...prev, errorMessage]);
+        toast({ title: "Query Failed", variant: "destructive" });
+      } finally {
+        setIsProcessing(false);
+        setChatHistoryUpdate((prev) => prev + 1);
       }
-      const errorMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content: errorContent,
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, errorMessage]);
-      toast({ title: "Query Failed", variant: "destructive" });
-    } finally {
-      setIsProcessing(false);
-    }
-  };
+    },
+    [
+      currentQuery,
+      messages,
+      isConfigured,
+      currentConversationId,
+      toast,
+      isProcessing,
+    ],
+  );
 
   const Sidebar = () => {
     const isSystemReady =
       systemStatus.backend && systemStatus.llm && systemStatus.vectorDB;
 
+    const toggleSidebar = () => {
+      const newState = !isSidebarCollapsed;
+      setIsSidebarCollapsed(newState);
+      localStorage.setItem("sidebar_collapsed", String(newState));
+    };
+
     return (
-      <div className="h-full flex flex-col bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-950">
+      <div
+        className={`h-full flex flex-col bg-slate-950/95 backdrop-blur-xl border-r border-slate-700/50 transition-all duration-300 ${isSidebarCollapsed ? "w-16" : "w-full"}`}
+      >
         {/* Quick Actions */}
-        <div className="p-4 space-y-2">
+        <div
+          className={`${isSidebarCollapsed ? "p-1.5 space-y-1.5" : "p-3 space-y-2"} pt-3`}
+        >
           <Button
-            variant="outline"
-            className="w-full justify-start gap-3 h-12 rounded-xl font-semibold border-2"
+            variant="ghost"
+            className={`w-full ${isSidebarCollapsed ? "h-10 p-0" : "h-11 gap-2.5 justify-start"} rounded-lg font-bold border border-sky-400/40 bg-sky-400/90 hover:bg-sky-300 text-slate-900 transition-all`}
             onClick={() =>
               window.open("https://stats.uptimerobot.com/FxzeOvqyqU", "_blank")
             }
+            title="Status"
           >
-            <Activity className="h-5 w-5" />
-            <span>Status</span>
+            <Activity className="h-4 w-4" />
+            {!isSidebarCollapsed && <span>Status</span>}
           </Button>
 
           <Button
-            variant="outline"
-            className="w-full justify-start gap-3 h-12 rounded-xl font-semibold border-2"
+            variant="ghost"
+            className={`w-full ${isSidebarCollapsed ? "h-10 p-0" : "h-11 gap-2.5 justify-start"} rounded-lg font-bold border border-sky-400/40 bg-sky-400/90 hover:bg-sky-300 text-slate-900 transition-all`}
             onClick={() => window.open(getApiDocsUrl(), "_blank")}
+            title="API Docs"
           >
-            <BookOpen className="h-5 w-5" />
-            <span>API Docs</span>
+            <BookOpen className="h-4 w-4" />
+            {!isSidebarCollapsed && <span>API Docs</span>}
           </Button>
 
           <UnifiedSettingsPanel onConfigChange={checkConfiguration}>
             <Button
-              variant="outline"
-              className="w-full justify-start gap-3 h-12 rounded-xl font-semibold border-2"
+              variant="ghost"
+              className={`w-full ${isSidebarCollapsed ? "h-10 p-0" : "h-11 gap-2.5 justify-start"} rounded-lg font-bold border border-sky-400/40 bg-sky-400/90 hover:bg-sky-300 text-slate-900 transition-all`}
+              title="Settings"
             >
-              <Settings className="h-5 w-5" />
-              <span className="flex-1 text-left">Settings</span>
-              {isSystemReady ? (
-                <CheckCircle className="h-5 w-5 text-green-500" />
-              ) : (
-                <AlertCircle className="h-5 w-5 text-red-500" />
+              <Settings className="h-4 w-4" />
+              {!isSidebarCollapsed && (
+                <>
+                  <span className="flex-1 text-left">Settings</span>
+                  {isSystemReady ? (
+                    <CheckCircle className="h-4 w-4 text-green-500 fill-green-500" />
+                  ) : (
+                    <AlertCircle className="h-4 w-4 text-red-500 fill-red-500" />
+                  )}
+                </>
               )}
             </Button>
           </UnifiedSettingsPanel>
         </div>
 
-        <Separator />
+        {/* Divider */}
+        <div className="h-px bg-sky-500/40 mx-2" />
 
         {/* Chat History */}
-        <div className="flex-1 overflow-hidden min-h-0">
-          <ScrollArea className="h-full">
-            <div className="p-3 overflow-hidden">
-              <div className="flex items-center justify-between px-2 mb-2 gap-2">
-                <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex-shrink-0">
-                  Recent
-                </p>
-                {(() => {
-                  const history = JSON.parse(
-                    localStorage.getItem("chat_history") || "[]"
-                  );
-                  return history.length > 0 ? (
-                    <button
-                      onClick={() => {
-                        localStorage.removeItem("chat_history");
-                        localStorage.removeItem("chat_messages");
-                        setMessages([]);
-                        setChatHistoryUpdate((prev) => prev + 1);
-                      }}
-                      className="text-[10px] font-semibold text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 transition-colors flex-shrink-0"
-                      title="Clear all chat history"
-                    >
-                      Clear All
-                    </button>
-                  ) : null;
-                })()}
-              </div>
+        <div className="flex-1 overflow-hidden min-h-0 py-2 w-full">
+          <ScrollArea className="h-full w-full">
+            <div className={`${isSidebarCollapsed ? "px-1.5" : "px-3"} w-full`}>
+              {!isSidebarCollapsed && (
+                <div className="flex items-center justify-between px-2 mb-2">
+                  <p className="text-xs font-bold text-sky-400/90 uppercase tracking-wider">
+                    Recent
+                  </p>
+                  {(() => {
+                    const history = JSON.parse(
+                      localStorage.getItem("chat_history") || "[]",
+                    );
+                    return history.length > 0 ? (
+                      <button
+                        onClick={() => {
+                          localStorage.removeItem("chat_history");
+                          localStorage.removeItem("chat_messages");
+                          setMessages([]);
+                          setChatHistoryUpdate((prev) => prev + 1);
+                        }}
+                        className="text-[10px] font-bold text-red-300 hover:text-red-200 transition-colors px-2 py-0.5 rounded bg-red-500/10 hover:bg-red-500/20"
+                        title="Clear all chat history"
+                      >
+                        Clear
+                      </button>
+                    ) : null;
+                  })()}
+                </div>
+              )}
               {(() => {
                 const history = JSON.parse(
-                  localStorage.getItem("chat_history") || "[]"
+                  localStorage.getItem("chat_history") || "[]",
                 );
                 return history.length > 0 ? (
-                  <div className="space-y-1 max-w-full">
-                    {history.slice(0, 10).map((conv: ChatConversation) => (
-                      <div
-                        key={conv.id}
-                        className="group relative flex items-center gap-1 w-full max-w-full rounded-lg border-b border-border/50 pb-1"
-                      >
-                        <button
-                          onClick={() => {
-                            // Only save current if it has messages and is different from the one being loaded
-                            if (
-                              messages.length > 0 &&
-                              messages[0]?.id !== conv.messages[0]?.id
-                            ) {
-                              const conversations = JSON.parse(
-                                localStorage.getItem("chat_history") || "[]"
+                  <div
+                    className={`${isSidebarCollapsed ? "space-y-1" : "space-y-1.5"} w-full`}
+                  >
+                    {history
+                      .slice(0, 10)
+                      .map((conv: ChatConversation, index: number) =>
+                        isSidebarCollapsed ? (
+                          // Collapsed view - numbered buttons
+                          <button
+                            key={conv.id}
+                            onClick={() => {
+                              setMessages(conv.messages);
+                              setCurrentConversationId(
+                                conv.conversationId || conv.id,
                               );
-                              const currentPreview =
-                                messages
-                                  .find((m) => m.role === "user")
-                                  ?.content.substring(0, 50) ||
-                                "New conversation";
-                              // Check if current chat already exists in history
-                              const exists = conversations.some(
-                                (c: ChatConversation) =>
-                                  c.preview === currentPreview
+                              localStorage.setItem(
+                                "chat_messages",
+                                JSON.stringify(conv.messages),
                               );
-                              if (!exists) {
-                                conversations.unshift({
-                                  id: Date.now().toString(),
-                                  timestamp: new Date().toISOString(),
-                                  messages: messages,
-                                  preview: currentPreview,
-                                });
-                                localStorage.setItem(
-                                  "chat_history",
-                                  JSON.stringify(conversations.slice(0, 50))
+                              localStorage.setItem(
+                                "current_conversation_id",
+                                conv.conversationId || conv.id,
+                              );
+                            }}
+                            className="w-full h-9 flex items-center justify-center rounded-md bg-sky-400/90 border border-sky-400/40 hover:bg-sky-300 transition-all text-sm font-bold text-slate-900"
+                            title={conv.preview}
+                          >
+                            {index + 1}
+                          </button>
+                        ) : (
+                          <button
+                            key={conv.id}
+                            onClick={() => {
+                              // Only save current if it has messages and is different from the one being loaded
+                              if (
+                                messages.length > 0 &&
+                                messages[0]?.id !== conv.messages[0]?.id
+                              ) {
+                                const conversations = JSON.parse(
+                                  localStorage.getItem("chat_history") || "[]",
                                 );
+                                const currentPreview =
+                                  messages
+                                    .find((m) => m.role === "user")
+                                    ?.content.substring(0, 50) ||
+                                  "New conversation";
+                                // Check if current chat already exists in history
+                                const exists = conversations.some(
+                                  (c: ChatConversation) =>
+                                    c.preview === currentPreview,
+                                );
+                                if (!exists) {
+                                  conversations.unshift({
+                                    id: Date.now().toString(),
+                                    timestamp: new Date().toISOString(),
+                                    messages: messages,
+                                    preview: currentPreview,
+                                  });
+                                  localStorage.setItem(
+                                    "chat_history",
+                                    JSON.stringify(conversations.slice(0, 50)),
+                                  );
+                                }
                               }
-                            }
-                            setMessages(conv.messages);
-                            localStorage.setItem(
-                              "chat_messages",
-                              JSON.stringify(conv.messages)
-                            );
-                          }}
-                          className="flex-1 min-w-0 text-left py-2.5 px-3 text-sm hover:bg-muted rounded-lg transition-colors"
-                        >
-                          <span className="block truncate">{conv.preview}</span>
-                          <span className="text-[10px] text-muted-foreground truncate block">
-                            {new Date(conv.timestamp).toLocaleDateString()}
-                          </span>
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            const history = JSON.parse(
-                              localStorage.getItem("chat_history") || "[]"
-                            );
-                            const updated = history.filter(
-                              (c: ChatConversation) => c.id !== conv.id
-                            );
-                            localStorage.setItem(
-                              "chat_history",
-                              JSON.stringify(updated)
-                            );
-                            setChatHistoryUpdate((prev) => prev + 1);
-                          }}
-                          className="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-red-100 dark:hover:bg-red-950 rounded-md transition-all flex-shrink-0"
-                          title="Delete conversation"
-                        >
-                          <Trash2 className="w-3.5 h-3.5 text-red-600 dark:text-red-400" />
-                        </button>
-                      </div>
-                    ))}
+                              setMessages(conv.messages);
+                              setCurrentConversationId(
+                                conv.conversationId || conv.id,
+                              );
+                              localStorage.setItem(
+                                "chat_messages",
+                                JSON.stringify(conv.messages),
+                              );
+                              localStorage.setItem(
+                                "current_conversation_id",
+                                conv.conversationId || conv.id,
+                              );
+                            }}
+                            className="w-full text-left py-2.5 px-3 rounded-lg border border-sky-400/40 bg-sky-400/90 hover:bg-sky-300 transition-all group"
+                          >
+                            <div className="flex items-center gap-2 w-full">
+                              <div className="flex-1 min-w-0">
+                                <p
+                                  className="text-sm font-bold text-slate-900 leading-tight mb-1"
+                                  title={conv.preview}
+                                >
+                                  {conv.preview.length > 20
+                                    ? conv.preview.substring(0, 20) + "..."
+                                    : conv.preview}
+                                </p>
+                                <p className="text-[10px] text-slate-700/70 font-medium">
+                                  {new Date(
+                                    conv.timestamp,
+                                  ).toLocaleDateString()}
+                                </p>
+                              </div>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const history = JSON.parse(
+                                    localStorage.getItem("chat_history") ||
+                                      "[]",
+                                  );
+                                  // Filter out ONLY the clicked conversation by matching its unique id
+                                  const updated = history.filter(
+                                    (c: ChatConversation) => c.id !== conv.id,
+                                  );
+
+                                  // If we deleted the current conversation, clear the messages
+                                  if (
+                                    currentConversationId ===
+                                    (conv.conversationId || conv.id)
+                                  ) {
+                                    setMessages([]);
+                                    setCurrentConversationId(
+                                      crypto.randomUUID(),
+                                    );
+                                    localStorage.removeItem("chat_messages");
+                                  }
+
+                                  localStorage.setItem(
+                                    "chat_history",
+                                    JSON.stringify(updated),
+                                  );
+                                  setChatHistoryUpdate((prev) => prev + 1);
+                                  toast({ title: "Conversation deleted" });
+                                }}
+                                className="p-1 hover:bg-red-500/30 rounded-md transition-colors flex-shrink-0"
+                                title="Delete conversation"
+                              >
+                                <Trash2 className="w-4 h-4 text-red-700 hover:text-red-800" />
+                              </button>
+                            </div>
+                          </button>
+                        ),
+                      )}
                   </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
-                    <div className="w-12 h-12 rounded-xl bg-muted flex items-center justify-center mb-2">
-                      <MessageSquare className="w-6 h-6 text-muted-foreground" />
+                ) : !isSidebarCollapsed ? (
+                  <div className="flex flex-col items-center justify-center py-8 px-4 text-center">
+                    <div className="w-12 h-12 rounded-xl bg-sky-400/20 border border-sky-400/40 flex items-center justify-center mb-3">
+                      <MessageSquare className="w-6 h-6 text-sky-500/80" />
                     </div>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-xs text-slate-300/80 font-medium">
                       No conversations yet
                     </p>
                   </div>
-                );
+                ) : null;
               })()}
             </div>
           </ScrollArea>
         </div>
 
-        <Separator />
+        {/* Divider */}
+        <div className="h-px bg-sky-500/40 mx-2" />
 
-        {/* New Chat Button */}
-        <div className="p-4">
+        {/* New Chat Button and Collapse Toggle */}
+        <div
+          className={isSidebarCollapsed ? "p-1.5 space-y-1.5" : "p-3 space-y-2"}
+        >
           <Button
             onClick={() => {
-              if (messages.length > 0) {
+              // Save current conversation ONLY if it has messages AND has at least one user message
+              const hasUserMessage = messages.some((m) => m.role === "user");
+
+              if (messages.length > 0 && hasUserMessage) {
                 const conversations = JSON.parse(
-                  localStorage.getItem("chat_history") || "[]"
+                  localStorage.getItem("chat_history") || "[]",
                 );
-                conversations.unshift({
-                  id: currentConversationId,
-                  timestamp: new Date().toISOString(),
-                  messages: messages,
-                  preview:
-                    messages
-                      .find((m) => m.role === "user")
-                      ?.content.substring(0, 50) || "New conversation",
-                  conversationId: currentConversationId,
-                });
-                localStorage.setItem(
-                  "chat_history",
-                  JSON.stringify(conversations.slice(0, 50))
+
+                // Check if this exact conversation ID already exists
+                const alreadyExists = conversations.some(
+                  (c: ChatConversation) =>
+                    c.conversationId === currentConversationId,
                 );
-                setChatHistoryUpdate((prev) => prev + 1);
+
+                // Only save if NOT already in history
+                if (!alreadyExists) {
+                  const firstUserMessage = messages.find(
+                    (m) => m.role === "user",
+                  );
+                  const preview = firstUserMessage
+                    ? firstUserMessage.content.substring(0, 50) +
+                      (firstUserMessage.content.length > 50 ? "..." : "")
+                    : "New conversation";
+
+                  conversations.unshift({
+                    id: Date.now().toString(),
+                    timestamp: new Date().toISOString(),
+                    messages: [...messages], // Clone to avoid reference issues
+                    preview: preview,
+                    conversationId: currentConversationId,
+                  });
+
+                  localStorage.setItem(
+                    "chat_history",
+                    JSON.stringify(conversations.slice(0, 50)),
+                  );
+                  setChatHistoryUpdate((prev) => prev + 1);
+                }
               }
-              localStorage.removeItem("chat_messages");
+
+              // Generate new conversation ID FIRST
               const newConvId = crypto.randomUUID();
-              localStorage.setItem("current_conversation_id", newConvId);
-              setCurrentConversationId(newConvId);
+
+              // Clear ALL state immediately
               setMessages([]);
+              setCurrentConversationId(newConvId);
               setConversationTitle("New Conversation");
+              setCurrentQuery("");
+
+              // Clear localStorage immediately
+              localStorage.setItem("current_conversation_id", newConvId);
+              localStorage.setItem("chat_messages", "[]");
+
+              // Create placeholder in chat history immediately
+              const conversations = JSON.parse(
+                localStorage.getItem("chat_history") || "[]",
+              );
+
+              conversations.unshift({
+                id: Date.now().toString(),
+                timestamp: new Date().toISOString(),
+                messages: [],
+                preview: "💬 New Chat",
+                conversationId: newConvId,
+              });
+
+              localStorage.setItem(
+                "chat_history",
+                JSON.stringify(conversations.slice(0, 50)),
+              );
+
+              setChatHistoryUpdate((prev) => prev + 1);
+
+              // Show feedback
+              toast({
+                title: "New Chat Started",
+                description: "Ready for a fresh conversation",
+              });
             }}
-            className="w-full justify-center gap-2 h-12 rounded-xl font-bold text-base bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 shadow-lg"
+            disabled={messages.length === 0}
+            className={`w-full ${isSidebarCollapsed ? "h-10 p-0" : "h-11 gap-2"} rounded-lg font-bold bg-gradient-to-r from-sky-500 to-sky-600 hover:from-sky-600 hover:to-sky-700 text-slate-900 shadow-lg shadow-sky-500/30 hover:shadow-sky-500/50 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none transition-all`}
+            title={isSidebarCollapsed ? "New Chat" : undefined}
           >
             <Plus className="h-5 w-5" />
-            New Chat
+            {!isSidebarCollapsed && "New Chat"}
+          </Button>
+
+          {/* Collapse/Expand Toggle - Desktop Only */}
+          <Button
+            variant="ghost"
+            onClick={toggleSidebar}
+            className={`hidden md:flex w-full ${isSidebarCollapsed ? "h-8 p-0 justify-center" : "h-9 gap-2 justify-start px-3"} rounded-md border border-slate-700/50 bg-slate-800/40 hover:bg-slate-700/60 text-sky-300/80 hover:text-sky-200 transition-all`}
+            title={isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            {isSidebarCollapsed ? (
+              <ChevronsRight className="h-3.5 w-3.5" />
+            ) : (
+              <>
+                <ChevronsLeft className="h-3.5 w-3.5" />
+                <span className="text-xs font-medium">Collapse</span>
+              </>
+            )}
           </Button>
         </div>
       </div>
@@ -503,7 +720,9 @@ const QueryInterface = () => {
 
       <div className="flex flex-1 min-h-0">
         {/* Desktop Sidebar */}
-        <div className="hidden md:flex md:flex-col w-64 border-r">
+        <div
+          className={`hidden md:flex md:flex-col border-r transition-all duration-300 ${isSidebarCollapsed ? "w-16" : "w-64"}`}
+        >
           <Sidebar />
         </div>
 
@@ -518,7 +737,7 @@ const QueryInterface = () => {
               <Menu className="h-5 w-5" />
             </Button>
           </DrawerTrigger>
-          <DrawerContent className="h-[85vh]">
+          <DrawerContent className="h-[85vh] bg-slate-950 border-slate-800">
             <Sidebar />
           </DrawerContent>
         </Drawer>
@@ -541,7 +760,7 @@ const QueryInterface = () => {
                 <UnifiedSettingsPanel onConfigChange={checkConfiguration}>
                   <Button
                     size="lg"
-                    className="bg-violet-600 hover:bg-violet-700 rounded-xl font-semibold px-8"
+                    className="bg-violet-600 hover:bg-violet-700 rounded-xl font-bold px-8"
                   >
                     <Settings className="h-5 w-5 mr-2" />
                     Get Started
@@ -554,11 +773,11 @@ const QueryInterface = () => {
               <div className="w-full max-w-2xl space-y-8 pb-32">
                 <div className="flex flex-col items-center space-y-8">
                   <div className="flex items-center gap-4">
-                    <h1 className="text-5xl font-black bg-gradient-to-r from-violet-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
+                    <h1 className="text-5xl font-black bg-gradient-to-r from-violet-600 via-purple-600 to-pink-600 bg-clip-text text-transparent leading-tight pb-2">
                       cogent-x
                     </h1>
                   </div>
-                  <p className="text-xl font-semibold text-center">
+                  <p className="text-xl font-bold text-center">
                     How can I assist you today?
                   </p>
                 </div>
@@ -566,7 +785,7 @@ const QueryInterface = () => {
                 {/* Setup Status Banner */}
                 <div className="bg-muted/30 border border-border rounded-xl p-4">
                   <div className="flex items-center justify-between mb-3">
-                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
                       Setup Progress
                     </p>
                     <span className="text-xs text-muted-foreground">
@@ -598,7 +817,7 @@ const QueryInterface = () => {
                 </div>
 
                 <div className="w-full">
-                  <p className="text-xs font-semibold text-muted-foreground mb-3 text-center">
+                  <p className="text-xs font-bold text-muted-foreground mb-3 text-center">
                     QUICK START PROMPTS
                   </p>
                   <div className="grid grid-cols-1 gap-3">
@@ -612,7 +831,7 @@ const QueryInterface = () => {
                           <div className="w-8 h-8 rounded-lg bg-violet-600 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
                             <Sparkles className="w-4 h-4 text-white" />
                           </div>
-                          <span className="text-sm font-semibold text-foreground leading-relaxed pt-1">
+                          <span className="text-sm font-bold text-foreground leading-relaxed pt-1">
                             {prompt}
                           </span>
                         </div>
@@ -646,7 +865,7 @@ const QueryInterface = () => {
                             <span className="text-[10px] text-muted-foreground mt-1 block text-right">
                               {new Date(message.timestamp).toLocaleTimeString(
                                 [],
-                                { hour: "2-digit", minute: "2-digit" }
+                                { hour: "2-digit", minute: "2-digit" },
                               )}
                             </span>
                           </div>
@@ -658,7 +877,7 @@ const QueryInterface = () => {
                           </div>
                           <div className="flex-1 max-w-[85%] md:max-w-[70%] lg:max-w-[60%]">
                             <div className="bg-muted/50 rounded-2xl rounded-tl-sm px-4 py-3 shadow-sm">
-                              <div className="prose prose-sm dark:prose-invert max-w-none prose-p:text-[15px] prose-p:leading-relaxed prose-p:my-1.5 prose-headings:font-bold prose-headings:mt-3 prose-headings:mb-1.5 prose-strong:font-semibold prose-code:bg-background prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-sm prose-pre:bg-background prose-pre:border prose-pre:border-border prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5">
+                              <div className="prose prose-sm dark:prose-invert max-w-none prose-p:text-[15px] prose-p:leading-relaxed prose-p:my-1.5 prose-headings:font-bold prose-headings:mt-3 prose-headings:mb-1.5 prose-strong:font-bold prose-code:bg-background prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-sm prose-pre:bg-background prose-pre:border prose-pre:border-border prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5">
                                 <ReactMarkdown remarkPlugins={[remarkGfm]}>
                                   {message.content}
                                 </ReactMarkdown>
@@ -668,7 +887,7 @@ const QueryInterface = () => {
                               <span className="text-[10px] text-muted-foreground">
                                 {new Date(message.timestamp).toLocaleTimeString(
                                   [],
-                                  { hour: "2-digit", minute: "2-digit" }
+                                  { hour: "2-digit", minute: "2-digit" },
                                 )}
                               </span>
                               {message.sources &&
@@ -681,7 +900,7 @@ const QueryInterface = () => {
                                           setViewingSource({
                                             url: source.url,
                                             usedChunks: source.used_chunks.map(
-                                              (c) => c.index
+                                              (c) => c.index,
                                             ),
                                           })
                                         }
@@ -809,7 +1028,7 @@ const QueryInterface = () => {
               href="https://github.com/somritdasgupta"
               target="_blank"
               rel="noopener noreferrer"
-              className="font-semibold hover:text-sky-300 transition-colors"
+              className="font-bold hover:text-sky-300 transition-colors"
             >
               @somritdasgupta
             </a>
@@ -821,7 +1040,7 @@ const QueryInterface = () => {
               href="https://github.com/somritdasgupta/cogent-x"
               target="_blank"
               rel="noopener noreferrer"
-              className="font-semibold hover:text-sky-300 transition-colors"
+              className="font-bold hover:text-sky-300 transition-colors"
             >
               Open Source
             </a>

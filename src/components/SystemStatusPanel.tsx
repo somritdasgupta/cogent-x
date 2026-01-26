@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,31 +12,56 @@ interface SystemStatus {
   vectorDB: boolean;
 }
 
-export const SystemStatusPanel = ({ onConfigChange }: { onConfigChange?: number }) => {
-  const [status, setStatus] = useState<SystemStatus>({ backend: false, llm: false, vectorDB: false });
+export const SystemStatusPanel = ({
+  onConfigChange,
+}: {
+  onConfigChange?: number;
+}) => {
+  const [status, setStatus] = useState<SystemStatus>({
+    backend: false,
+    llm: false,
+    vectorDB: false,
+  });
   const uptimeStatusPageUrl = import.meta.env.VITE_UPTIME_STATUS_PAGE;
+  const statusCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  const checkStatus = async () => {
+  const checkStatus = useCallback(async () => {
     try {
       const response = await apiGet(API_ENDPOINTS.HEALTH);
       if (response.ok) {
         const data = await response.json();
-        setStatus(data);
+        setStatus((prevStatus) => {
+          // Only update if status actually changed
+          if (JSON.stringify(prevStatus) !== JSON.stringify(data)) {
+            return data;
+          }
+          return prevStatus;
+        });
       }
     } catch (error) {
-      setStatus({ backend: false, llm: false, vectorDB: false });
+      setStatus((prevStatus) => {
+        const offline = { backend: false, llm: false, vectorDB: false };
+        if (JSON.stringify(prevStatus) !== JSON.stringify(offline)) {
+          return offline;
+        }
+        return prevStatus;
+      });
     }
-  };
-
-  useEffect(() => {
-    checkStatus();
-    const interval = setInterval(checkStatus, 30000);
-    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
+    checkStatus();
+    statusCheckIntervalRef.current = setInterval(checkStatus, 30000);
+    return () => {
+      if (statusCheckIntervalRef.current) {
+        clearInterval(statusCheckIntervalRef.current);
+      }
+    };
+  }, [checkStatus]);
+
+  useEffect(() => {
     if (onConfigChange) checkStatus();
-  }, [onConfigChange]);
+  }, [onConfigChange, checkStatus]);
 
   const isSystemReady = status.backend && status.llm && status.vectorDB;
 

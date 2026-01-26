@@ -1,8 +1,24 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { getSessionInfo, clearSession, hasSession } from "@/lib/session";
 import { apiGet, apiDelete, API_ENDPOINTS } from "@/config/api";
@@ -21,8 +37,8 @@ export function SessionInfo() {
   const [loading, setLoading] = useState(false);
   const sessionInfo = getSessionInfo();
 
-  const loadSessionStats = async () => {
-    if (!hasSession()) return;
+  const loadSessionStats = useCallback(async () => {
+    if (!hasSession() || loading) return;
     try {
       setLoading(true);
       const response = await apiGet(API_ENDPOINTS.SESSION_INFO);
@@ -42,28 +58,40 @@ export function SessionInfo() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [loading]);
 
-  const handleClearSession = async () => {
+  const handleClearSession = useCallback(async () => {
+    if (loading) return;
     try {
       setLoading(true);
       try {
         await apiDelete(API_ENDPOINTS.SESSION_DELETE);
       } catch (error) {
-        // Ignore
+        // Ignore API errors
       }
       clearSession();
       setSessionStats(null);
-      toast({ title: "Session Cleared", description: "Your session has been cleared. A new session will be created on your next action." });
+      toast({
+        title: "Session Cleared",
+        description:
+          "Your session has been cleared. A new session will be created on your next action.",
+        className: "border-green-500/50 bg-green-50 dark:bg-green-950/30",
+      });
       setTimeout(() => window.location.reload(), 1000);
     } catch (error) {
-      toast({ title: "Error", description: "Failed to clear session. Please try again.", variant: "destructive" });
+      toast({
+        title: "Error",
+        description: "Failed to clear session. Please try again.",
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
-  };
+  }, [loading, toast]);
 
-  useEffect(() => { loadSessionStats(); }, []);
+  useEffect(() => {
+    loadSessionStats();
+  }, [loadSessionStats]);
 
   if (!hasSession()) return null;
 
@@ -90,7 +118,7 @@ export function SessionInfo() {
             size="sm"
             onClick={loadSessionStats}
             disabled={loading}
-            className="flex-1"
+            className="flex-1 bg-slate-800 border-slate-700 text-sky-400 hover:bg-slate-700 hover:text-sky-300 hover:border-sky-500/50 disabled:opacity-50"
           >
             <RefreshCw
               className={`h-3 w-3 mr-1 ${loading ? "animate-spin" : ""}`}

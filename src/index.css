@@ -270,9 +270,13 @@ All colors MUST be HSL.
     transparent 100%
   );
   background-size: 200% 100%;
-  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
-  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
   mask-composite: exclude;
   padding: 3px;
   animation: border-trail 3s linear infinite;
@@ -293,7 +297,8 @@ All colors MUST be HSL.
 
 /* Animated gradient blobs */
 @keyframes blob {
-  0%, 100% {
+  0%,
+  100% {
     transform: translate(0, 0) scale(1);
   }
   25% {
@@ -317,4 +322,114 @@ All colors MUST be HSL.
 
 .animation-delay-4000 {
   animation-delay: 4s;
+}
+
+/* Performance optimizations */
+* {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Prevent layout shift */
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+/* Smooth transitions without jank */
+.transition-smooth {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: auto;
+}
+
+/* Prevent flash of unstyled content */
+[data-loading="true"] {
+  opacity: 0;
+  pointer-events: none;
+}
+
+[data-loading="false"] {
+  opacity: 1;
+  transition: opacity 0.15s ease-in;
+}
+
+/* Optimized scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.2);
+  border-radius: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.3);
+}
+
+/* Prevent button double-click issues */
+button:disabled {
+  pointer-events: none;
+  opacity: 0.5;
+}
+
+/* Stable sidebar layout */
+.sidebar-item {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  width: 100%;
+  overflow: hidden;
+}
+
+.sidebar-item-content {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* Prevent modal from closing on status updates */
+.modal-stable {
+  pointer-events: auto;
+}
+
+/* Loading skeleton animations */
+@keyframes skeleton-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.skeleton {
+  animation: skeleton-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  background: hsl(var(--muted));
+  border-radius: var(--radius);
+}
+
+/* Focus visible for accessibility */
+*:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+
+/* Reduced motion for accessibility */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

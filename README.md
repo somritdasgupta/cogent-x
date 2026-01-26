@@ -20,7 +20,6 @@ First run: 3-5 minutes | Subsequent runs: Instant
 
 - Python 3.9+
 - Node.js 18+
-- FFmpeg (for audio)
 
 ## Configuration
 
@@ -28,17 +27,22 @@ First run: 3-5 minutes | Subsequent runs: Instant
 
 Settings → Providers:
 
-**Ollama (Local)** - Privacy, no costs
+**Ollama (Local)**
+
 - URL: http://localhost:11434
 - Model: llama3:8b
 
-**OpenAI** - Best quality
+**OpenAI**
+
 - API Key: [platform.openai.com](https://platform.openai.com/api-keys)
+- Base URL: https://api.openai.com/v1 (customizable for Azure OpenAI or proxies)
 - Model: gpt-4 or gpt-3.5-turbo
 
-**Gemini** - Balanced
+**Gemini**
+
 - API Key: [makersuite.google.com](https://makersuite.google.com/app/apikey)
-- Model: gemini-pro
+- Base URL: https://generativelanguage.googleapis.com/v1beta (future-proof for proxies)
+- Model: gemini-2.0-flash-exp
 
 ### Environment
 
@@ -53,10 +57,29 @@ EMBEDDING_MODEL_NAME=BAAI/bge-large-en-v1.5
 OLLAMA_BASE_URL=http://localhost:11434
 OLLAMA_MODEL=llama3:8b
 
-# Optional
+# Optional - OpenAI
 # OPENAI_API_KEY=sk-proj-...
+# OPENAI_API_BASE_URL=https://api.openai.com/v1
+# OPENAI_MODEL=gpt-4
+# OPENAI_EMBEDDING_MODEL=text-embedding-3-small
+
+# Optional - Gemini
 # GEMINI_API_KEY=AIzaSy...
+# GEMINI_API_BASE_URL=https://generativelanguage.googleapis.com/v1beta
+# GEMINI_MODEL=gemini-2.0-flash-exp
+# GEMINI_EMBEDDING_MODEL=models/text-embedding-004
+
+# Optional - Custom System Prompt
+# SYSTEM_PROMPT="You are a helpful assistant that answers questions based on provided context. Be accurate, concise, and cite sources when possible."
 ```
+
+### Custom System Prompt
+
+Control AI behavior and response style through Settings → Providers → System Prompt:
+
+- **Default**: Balanced, helpful responses
+- **Technical**: Concise with code examples
+- **Custom**: Define your own personality, tone, and format
 
 ## Usage
 
@@ -65,6 +88,7 @@ OLLAMA_MODEL=llama3:8b
 **UI:** Documents → Enter URL → Ingest
 
 **API:**
+
 ```bash
 curl -X POST "http://localhost:8000/api/v1/ingest" \
   -H "Content-Type: application/json" \
@@ -74,6 +98,7 @@ curl -X POST "http://localhost:8000/api/v1/ingest" \
 ### Ask Questions
 
 Type your question or use Quick Prompts:
+
 - "How do I get started?"
 - "Show me a code example"
 - "Show me the database schema"
@@ -92,11 +117,13 @@ Services: Frontend (3000), Backend (8000), Ollama (11434)
 ### Render
 
 **Backend:**
+
 - Build: `bash run.sh backend`
 - Start: `cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT`
 - Add env vars from `.env.example`
 
 **Frontend:**
+
 - Build: `npm install && npm run build`
 - Publish: `dist`
 - Set: `VITE_API_BASE_URL=<backend-url>`
@@ -111,14 +138,15 @@ Set: `VITE_API_BASE_URL=<backend-url>`
 
 ## API
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/v1/ingest` | Ingest documentation |
-| POST | `/api/v1/ask` | Ask question |
-| GET | `/api/v1/health` | Health check |
-| GET/POST | `/api/v1/config` | Configuration |
+| Method   | Endpoint         | Description          |
+| -------- | ---------------- | -------------------- |
+| POST     | `/api/v1/ingest` | Ingest documentation |
+| POST     | `/api/v1/ask`    | Ask question         |
+| GET      | `/api/v1/health` | Health check         |
+| GET/POST | `/api/v1/config` | Configuration        |
 
 **Example:**
+
 ```bash
 curl -X POST "http://localhost:8000/api/v1/ask" \
   -H "Content-Type: application/json" \
@@ -138,17 +166,20 @@ Docs: http://localhost:8000/docs
 ## Troubleshooting
 
 **LLM Disconnected:**
+
 ```bash
 ollama list
 ollama pull llama3:8b
 ```
 
 **Ingestion Failed:**
+
 - Check URL accessibility
 - Verify `vector_db` write permissions
 - Check logs: `docker logs cogent-x-backend-1`
 
 **Port In Use:**
+
 ```bash
 # Linux/Mac
 lsof -ti:8000 | xargs kill -9
