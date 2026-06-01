@@ -221,11 +221,28 @@ All colors MUST be HSL.
 
   .prose table {
     @apply w-full border-collapse my-3;
+    display: block;
+    overflow-x: auto;
+    font-size: 0.75rem;
+  }
+
+  @media (min-width: 640px) {
+    .prose table {
+      font-size: 0.875rem;
+    }
   }
 
   .prose th,
   .prose td {
-    @apply border border-border px-3 py-2 text-left;
+    @apply border border-border px-2 py-1.5 text-left;
+    white-space: nowrap;
+  }
+
+  @media (min-width: 640px) {
+    .prose th,
+    .prose td {
+      @apply px-3 py-2;
+    }
   }
 
   .prose th {
@@ -243,6 +260,9 @@ All colors MUST be HSL.
   /* Prevent horizontal overflow on prose elements */
   .prose {
     @apply overflow-hidden;
+    max-width: 100%;
+    word-break: break-word;
+    overflow-wrap: anywhere;
   }
 
   .prose p,
@@ -250,20 +270,36 @@ All colors MUST be HSL.
   .prose blockquote {
     @apply break-words;
     word-wrap: break-word;
-    overflow-wrap: break-word;
+    overflow-wrap: anywhere;
+    max-width: 100%;
   }
 
   .prose code {
     @apply break-all;
+    word-break: break-all;
+    overflow-wrap: anywhere;
+    max-width: 100%;
+    white-space: pre-wrap;
   }
 
   .prose pre {
     @apply overflow-x-auto;
+    max-width: 100%;
+  }
+
+  .prose pre code {
+    white-space: pre;
+    word-break: normal;
+    overflow-wrap: normal;
   }
 
   /* Ensure all inline elements wrap properly */
   .prose a {
     @apply break-words;
+    word-break: break-all;
+    overflow-wrap: anywhere;
+    max-width: 100%;
+    display: inline-block;
   }
 
   .app-noise {
@@ -787,10 +823,14 @@ All colors MUST be HSL.
 
 .chat-bubble-user {
   @apply rounded-xl rounded-tr-md border border-primary/20 bg-card/85 px-3 py-2 sm:px-4 sm:py-3 text-primary-foreground shadow-[0_10px_30px_-18px_rgba(59,130,246,0.08)];
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .chat-bubble-assistant {
   @apply rounded-[1.25rem] rounded-tl-md border border-border/70 bg-card/80 px-3 py-2 sm:px-4 sm:py-3 text-foreground shadow-[0_20px_60px_-35px_rgba(15,23,42,0.35)] backdrop-blur-xl;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .settings-shell {

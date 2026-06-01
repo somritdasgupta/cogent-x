@@ -10,6 +10,7 @@ import { API_ENDPOINTS, apiGet, apiPost } from "@/config/api";
 
 export const DocumentIngestionPanel = () => {
   const [url, setUrl] = useState("");
+  const [urls, setUrls] = useState<string[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [knowledgeBases, setKnowledgeBases] = useState<string[]>([]);
   const [isLoadingKB, setIsLoadingKB] = useState(true);
@@ -34,45 +35,77 @@ export const DocumentIngestionPanel = () => {
     fetchKnowledgeBases();
   }, [fetchKnowledgeBases]);
 
-  const handleIngestion = useCallback(
-    async (e: React.FormEvent) => {
-      e.preventDefault();
-      if (!url.trim()) {
-        toast({
-          title: "Error",
-          description: "Please enter a valid URL",
-          variant: "destructive",
-        });
-        return;
-      }
-      if (isProcessing) return; // Prevent double submissions
+  const handleAddUrl = useCallback(() => {
+    if (!url.trim()) return;
+    if (urls.includes(url.trim())) {
+      toast({
+        title: "Already added",
+        description: "This URL is already in the queue.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setUrls([...urls, url.trim()]);
+    setUrl("");
+  }, [url, urls, toast]);
 
-      setIsProcessing(true);
-      try {
-        const response = await apiPost(API_ENDPOINTS.INGEST, {
-          url: url.trim(),
-        });
-        if (!response.ok) throw new Error("Ingestion failed");
-        const data = await response.json();
+  const handleRemoveUrl = useCallback(
+    (urlToRemove: string) => {
+      setUrls(urls.filter((u) => u !== urlToRemove));
+    },
+    [urls],
+  );
+
+  const handleIngestion = useCallback(async () => {
+    if (urls.length === 0) {
+      toast({
+        title: "Error",
+        description: "Please add at least one URL",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (isProcessing) return;
+
+    setIsProcessing(true);
+    let successCount = 0;
+    let failCount = 0;
+
+    try {
+      for (const ingestUrl of urls) {
+        try {
+          const response = await apiPost(API_ENDPOINTS.INGEST, {
+            url: ingestUrl,
+          });
+          if (!response.ok) {
+            failCount++;
+          } else {
+            successCount++;
+          }
+        } catch {
+          failCount++;
+        }
+      }
+
+      if (successCount > 0) {
         toast({
-          title: "Success",
-          description: data.message || "Document ingested successfully",
-          className: "border-green-500/50 bg-green-50 dark:bg-green-950/30",
+          title: "Documents ingested",
+          description: `${successCount} document${successCount !== 1 ? "s" : ""} added successfully.`,
         });
-        setUrl("");
-        await fetchKnowledgeBases();
-      } catch (error) {
+      }
+      if (failCount > 0) {
         toast({
-          title: "Error",
-          description: "Failed to ingest document",
+          title: "Partial failure",
+          description: `${failCount} document${failCount !== 1 ? "s" : ""} failed to ingest.`,
           variant: "destructive",
         });
-      } finally {
-        setIsProcessing(false);
       }
-    },
-    [url, isProcessing, toast, fetchKnowledgeBases],
-  );
+      setUrls([]);
+      await fetchKnowledgeBases();
+    } finally {
+      setIsProcessing(false);
+    }
+  }, [urls, isProcessing, toast, fetchKnowledgeBases]);
 
   return (
     <Card className="app-panel w-full">
@@ -82,34 +115,74 @@ export const DocumentIngestionPanel = () => {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4 px-4 sm:px-6">
-        <form onSubmit={handleIngestion} className="space-y-3">
-          <Input
-            type="url"
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            placeholder="Enter documentation URL to ingest"
-            disabled={isProcessing}
-            className="h-11 rounded-xl border-border/70 bg-background/80 px-4 text-sm shadow-sm"
-          />
+        <div className="space-y-3">
+          <div className="flex gap-2">
+            <Input
+              type="url"
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              onKeyPress={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  handleAddUrl();
+                }
+              }}
+              placeholder="Enter documentation URL..."
+              disabled={isProcessing}
+              className="h-10 rounded-lg border-border/70 bg-background/80 px-3 text-sm shadow-sm flex-1"
+            />
+            <Button
+              onClick={handleAddUrl}
+              disabled={!url.trim() || isProcessing}
+              className="h-10 rounded-lg bg-primary/80 text-white hover:bg-primary text-sm font-medium"
+            >
+              Add
+            </Button>
+          </div>
+
+          {urls.length > 0 && (
+            <div className="space-y-2 rounded-lg border border-border/30 bg-background/40 p-3">
+              <p className="text-xs font-medium text-foreground/70">
+                Queue ({urls.length})
+              </p>
+              <div className="space-y-1.5 max-h-[150px] overflow-y-auto">
+                {urls.map((u) => (
+                  <div
+                    key={u}
+                    className="flex items-center justify-between gap-2 rounded-lg bg-background/60 px-2.5 py-1.5 text-xs group"
+                  >
+                    <span className="truncate text-foreground/75">{u}</span>
+                    <button
+                      onClick={() => handleRemoveUrl(u)}
+                      className="h-5 w-5 rounded-sm flex items-center justify-center text-muted-foreground hover:bg-destructive/20 hover:text-destructive transition-colors shrink-0"
+                      title="Remove"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           <Button
-            type="submit"
-            className="w-full rounded-xl bg-gradient-to-r from-primary to-fuchsia-500 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-95"
-            disabled={isProcessing || !url.trim()}
+            onClick={handleIngestion}
+            className="w-full rounded-lg bg-gradient-to-r from-primary to-fuchsia-500 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-95 h-10"
+            disabled={isProcessing || urls.length === 0}
           >
             {isProcessing ? (
               <>
                 <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
-                Processing...
+                Ingesting...
               </>
             ) : (
               <>
                 <Upload className="mr-2 h-3.5 w-3.5" />
-                Ingest Document
+                Ingest All Documents
               </>
             )}
           </Button>
-        </form>
+        </div>
 
         <Separator className="bg-border/70" />
 

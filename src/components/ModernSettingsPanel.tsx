@@ -83,6 +83,7 @@ interface ModernSettingsPanelProps {
   onConfigChange?: () => void;
   initialSection?: (typeof sections)[number]["id"];
   noSidebar?: boolean;
+  disabled?: boolean;
 }
 
 const defaultConfig: Config = {
@@ -179,6 +180,7 @@ export const ModernSettingsPanel = ({
   onConfigChange,
   initialSection,
   noSidebar = false,
+  disabled = false,
 }: ModernSettingsPanelProps = {}) => {
   const { toast } = useToast();
   const isMobile = useIsMobile();
@@ -204,9 +206,6 @@ export const ModernSettingsPanel = ({
   const [manualTitle, setManualTitle] = useState("");
   const [manualContent, setManualContent] = useState("");
   const [ingestionMode, setIngestionMode] = useState<"url" | "manual">("url");
-  const [documentScope, setDocumentScope] = useState<"current" | "global">(
-    "current",
-  );
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -312,26 +311,17 @@ export const ModernSettingsPanel = ({
 
     setIsProcessing(true);
     try {
-      const conversationId =
-        documentScope === "current"
-          ? localStorage.getItem("current_conversation_id") || "default"
-          : "global";
       const endpoint =
         ingestionMode === "url"
           ? API_ENDPOINTS.INGEST
           : API_ENDPOINTS.INGEST + "/manual";
       const payload =
         ingestionMode === "url"
-          ? {
-              url: url.trim(),
-              provider: aiProvider,
-              conversation_id: conversationId,
-            }
+          ? { url: url.trim(), provider: aiProvider }
           : {
               title: manualTitle.trim() || "Manual Document",
               content: manualContent.trim(),
               provider: aiProvider,
-              conversation_id: conversationId,
             };
 
       const response = await apiPost(endpoint, payload);
@@ -361,7 +351,6 @@ export const ModernSettingsPanel = ({
     }
   }, [
     aiProvider,
-    documentScope,
     fetchAll,
     ingestionMode,
     isProcessing,
@@ -453,12 +442,12 @@ export const ModernSettingsPanel = ({
                 </div>
               </div>
 
-              <div className="mt-5 h-2 overflow-hidden rounded-full bg-background/50">
-                <div
-                  className="h-full rounded-full bg-gradient-to-r from-primary to-fuchsia-500 transition-all"
-                  style={{ width: `${readiness}%` }}
-                />
-              </div>
+              <progress
+                value={readiness}
+                max={100}
+                className="mt-5 h-2 w-full overflow-hidden rounded-full bg-background/50 [&::-moz-progress-bar]:rounded-full [&::-moz-progress-bar]:bg-primary [&::-webkit-progress-bar]:rounded-full [&::-webkit-progress-bar]:bg-background/50 [&::-webkit-progress-value]:rounded-full [&::-webkit-progress-value]:bg-primary"
+                aria-label="Workspace readiness"
+              />
             </div>
 
             <div className="space-y-6">
@@ -814,161 +803,144 @@ export const ModernSettingsPanel = ({
           </div>
         );
 
-      case "ingest":
+      case "ingest": {
+        const ingestServiceItems = [
+          { label: "Backend", ok: status.backend },
+          { label: "LLM", ok: status.llm },
+          { label: "Vector DB", ok: status.vectorDB },
+        ];
+        const ingestHealthy = ingestServiceItems.filter((i) => i.ok).length;
+        const ingestReadiness = Math.round((ingestHealthy / ingestServiceItems.length) * 100);
         return (
-          <div className="space-y-6">
-            {!noSidebar && (
-              <CardHeader>
-                <CardTitle>Ingest Content</CardTitle>
-                <CardDescription>
-                  Add new documents to your knowledge base to improve chat
-                  context.
-                </CardDescription>
-              </CardHeader>
-            )}
-            <div className="space-y-8">
-              <div className="space-y-4">
-                <Label className="text-sm font-semibold">Document Scope</Label>
-                <RadioGroup
-                  value={documentScope}
-                  onValueChange={(v) =>
-                    setDocumentScope(v as "current" | "global")
-                  }
-                  className="grid gap-3 sm:grid-cols-2"
-                >
-                  <label className="flex items-center space-x-3 rounded-2xl border-2 p-4 cursor-pointer bg-background/40 backdrop-blur-xl hover:bg-background/60 transition-all has-[:checked]:border-primary/60 has-[:checked]:bg-primary/10 has-[:checked]:shadow-lg has-[:checked]:shadow-primary/20">
-                    <RadioGroupItem value="current" />
-                    <div className="space-y-1 flex-1">
-                      <div className="text-sm font-semibold leading-none">
-                        Current Chat
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        Only available in this session
-                      </div>
-                    </div>
-                  </label>
-                  <label className="flex items-center space-x-3 rounded-2xl border-2 p-4 cursor-pointer bg-background/40 backdrop-blur-xl hover:bg-background/60 transition-all has-[:checked]:border-primary/60 has-[:checked]:bg-primary/10 has-[:checked]:shadow-lg has-[:checked]:shadow-primary/20">
-                    <RadioGroupItem value="global" />
-                    <div className="space-y-1 flex-1">
-                      <div className="text-sm font-semibold leading-none">
-                        Global
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        Available across all chats
-                      </div>
-                    </div>
-                  </label>
-                </RadioGroup>
-              </div>
-
-              <div className="space-y-4">
-                <Label className="text-sm font-semibold">Source Type</Label>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <button
-                    type="button"
-                    onClick={() => setIngestionMode("url")}
-                    className={cn(
-                      "flex flex-col items-start gap-3 rounded-2xl border-2 p-5 transition-all text-left backdrop-blur-xl",
-                      ingestionMode === "url"
-                        ? "border-primary/60 bg-primary/10 shadow-lg shadow-primary/20"
-                        : "border-border/40 bg-background/40 hover:bg-background/60 hover:border-border/60",
-                    )}
-                  >
-                    <Globe
+          <div className="space-y-5">
+            {/* Status strip */}
+            <div className="rounded-2xl border border-border/30 bg-background/40 p-4 backdrop-blur-xl space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex flex-wrap gap-1.5">
+                  {ingestServiceItems.map((item) => (
+                    <span
+                      key={item.label}
                       className={cn(
-                        "h-6 w-6",
-                        ingestionMode === "url"
-                          ? "text-primary"
-                          : "text-muted-foreground",
+                        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium",
+                        item.ok
+                          ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                          : "border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400",
                       )}
-                    />
-                    <div className="font-semibold text-sm">Web URL</div>
-                    <div className="text-xs text-muted-foreground">
-                      Scrape and ingest a webpage
-                    </div>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setIngestionMode("manual")}
-                    className={cn(
-                      "flex flex-col items-start gap-3 rounded-2xl border-2 p-5 transition-all text-left backdrop-blur-xl",
-                      ingestionMode === "manual"
-                        ? "border-primary/60 bg-primary/10 shadow-lg shadow-primary/20"
-                        : "border-border/40 bg-background/40 hover:bg-background/60 hover:border-border/60",
-                    )}
-                  >
-                    <FileText
-                      className={cn(
-                        "h-6 w-6",
-                        ingestionMode === "manual"
-                          ? "text-primary"
-                          : "text-muted-foreground",
-                      )}
-                    />
-                    <div className="font-semibold text-sm">Raw Text</div>
-                    <div className="text-xs text-muted-foreground">
-                      Paste text content directly
-                    </div>
-                  </button>
+                    >
+                      <span className={cn("h-1.5 w-1.5 rounded-full", item.ok ? "bg-emerald-500" : "bg-amber-500")} />
+                      {item.label}
+                    </span>
+                  ))}
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold bg-gradient-to-br from-primary to-fuchsia-500 bg-clip-text text-transparent">
+                    {ingestReadiness}%
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {dbStats.total_documents} docs · {dbStats.total_chunks} chunks
+                  </span>
                 </div>
               </div>
+              <progress
+                value={ingestReadiness}
+                max={100}
+                className="h-1 w-full overflow-hidden rounded-full bg-background/50 [&::-moz-progress-bar]:rounded-full [&::-moz-progress-bar]:bg-primary [&::-webkit-progress-bar]:rounded-full [&::-webkit-progress-bar]:bg-background/50 [&::-webkit-progress-value]:rounded-full [&::-webkit-progress-value]:bg-primary"
+                aria-label="Ingestion readiness"
+              />
+            </div>
 
-              <div className="space-y-4 pt-2">
-                {ingestionMode === "url" ? (
-                  <div className="space-y-3">
-                    <Label className="text-sm font-medium">Document URL</Label>
-                    <Input
-                      value={url}
-                      onChange={(e) => setUrl(e.target.value)}
-                      placeholder="https://docs.example.com"
-                      className="h-12 rounded-xl border-border/40 bg-background/40 backdrop-blur-xl"
-                    />
-                  </div>
-                ) : (
-                  <>
-                    <div className="space-y-3">
-                      <Label className="text-sm font-medium">
-                        Title (Optional)
-                      </Label>
-                      <Input
-                        value={manualTitle}
-                        onChange={(e) => setManualTitle(e.target.value)}
-                        placeholder="Document title"
-                        className="h-12 rounded-xl border-border/40 bg-background/40 backdrop-blur-xl"
-                      />
-                    </div>
-                    <div className="space-y-3">
-                      <Label className="text-sm font-medium">Content</Label>
-                      <Textarea
-                        value={manualContent}
-                        onChange={(e) => setManualContent(e.target.value)}
-                        placeholder="Paste your text here..."
-                        className="min-h-[160px] rounded-xl border-border/40 bg-background/40 backdrop-blur-xl resize-y"
-                      />
-                    </div>
-                  </>
+            {/* Source type toggle */}
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setIngestionMode("url")}
+                className={cn(
+                  "flex flex-1 items-center justify-center gap-2 rounded-xl border py-2.5 text-sm font-medium transition-all",
+                  ingestionMode === "url"
+                    ? "border-primary/60 bg-primary/10 text-primary shadow-sm"
+                    : "border-border/40 bg-background/40 text-muted-foreground hover:border-border/60 hover:text-foreground",
                 )}
-              </div>
-            </div>
-            <div className="border-t border-border/20 bg-transparent backdrop-blur-xl px-6 py-4 flex items-center justify-between">
-              <span className="text-xs text-muted-foreground hidden sm:inline-flex">
-                Using {aiProvider} for embeddings
-              </span>
-              <Button
-                onClick={handleIngestion}
-                disabled={isProcessing}
-                className="w-full sm:w-auto h-11 rounded-xl bg-gradient-to-r from-primary/90 to-fuchsia-500/90 shadow-lg shadow-primary/20"
               >
-                {isProcessing ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <Upload className="mr-2 h-4 w-4" />
-                )}{" "}
-                Ingest Document
-              </Button>
+                <Globe className="h-4 w-4" />
+                Web URL
+              </button>
+              <button
+                type="button"
+                onClick={() => setIngestionMode("manual")}
+                className={cn(
+                  "flex flex-1 items-center justify-center gap-2 rounded-xl border py-2.5 text-sm font-medium transition-all",
+                  ingestionMode === "manual"
+                    ? "border-primary/60 bg-primary/10 text-primary shadow-sm"
+                    : "border-border/40 bg-background/40 text-muted-foreground hover:border-border/60 hover:text-foreground",
+                )}
+              >
+                <FileText className="h-4 w-4" />
+                Raw Text
+              </button>
             </div>
+
+            {/* Input area */}
+            {ingestionMode === "url" ? (
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Document URL</Label>
+                <Input
+                  value={url}
+                  onChange={(e) => setUrl(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleIngestion()}
+                  placeholder="https://docs.example.com"
+                  className="h-11 rounded-xl border-border/40 bg-background/40 backdrop-blur-xl"
+                />
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <Input
+                  value={manualTitle}
+                  onChange={(e) => setManualTitle(e.target.value)}
+                  placeholder="Title (optional)"
+                  className="h-11 rounded-xl border-border/40 bg-background/40 backdrop-blur-xl"
+                />
+                <Textarea
+                  value={manualContent}
+                  onChange={(e) => setManualContent(e.target.value)}
+                  placeholder="Paste your text here..."
+                  className="min-h-[140px] rounded-xl border-border/40 bg-background/40 backdrop-blur-xl resize-y"
+                />
+              </div>
+            )}
+
+            <Button
+              onClick={handleIngestion}
+              disabled={isProcessing}
+              className="w-full h-11 rounded-xl bg-gradient-to-r from-primary/90 to-fuchsia-500/90 shadow-lg shadow-primary/20"
+            >
+              {isProcessing ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Upload className="mr-2 h-4 w-4" />
+              )}
+              Ingest Document
+            </Button>
+
+            {/* KB sources list below button */}
+            {knowledgeBases.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-muted-foreground">Ingested sources</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {knowledgeBases.map((kb) => (
+                    <span
+                      key={kb}
+                      className="inline-flex items-center gap-1 rounded-full border border-primary/20 bg-primary/5 px-2.5 py-1 text-xs text-muted-foreground"
+                    >
+                      <FileText className="h-3 w-3 shrink-0" />
+                      <span className="max-w-[160px] truncate">{kb}</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         );
+      }
 
       case "tune":
         return (
@@ -1265,9 +1237,17 @@ export const ModernSettingsPanel = ({
     </div>
   );
 
+  const handleOpenChange = useCallback(
+    (nextOpen: boolean) => {
+      if (disabled && nextOpen) return;
+      setOpen(nextOpen);
+    },
+    [disabled],
+  );
+
   if (isMobile) {
     return (
-      <Drawer open={open} onOpenChange={setOpen}>
+      <Drawer open={open} onOpenChange={handleOpenChange}>
         <DrawerTrigger asChild>{trigger}</DrawerTrigger>
         <DrawerContent className="max-h-[94vh] border border-primary/20 bg-gradient-to-b from-background/95 via-background/90 to-background/95 p-0 shadow-2xl overflow-hidden rounded-t-[2rem]">
           <div className="flex h-[94vh] flex-col overflow-hidden px-3 pb-3 pt-3">
@@ -1313,7 +1293,7 @@ export const ModernSettingsPanel = ({
     );
   }
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       {noSidebar ? (
         <DialogContent className="max-w-[900px] w-[92vw] max-h-[calc(100vh-2rem)] p-0 gap-0 overflow-hidden bg-gradient-to-br from-background/95 via-background/90 to-background/95 backdrop-blur-2xl border border-primary/30 sm:rounded-xl shadow-2xl before:absolute before:inset-0 before:bg-gradient-to-br before:from-primary/5 before:via-transparent before:to-transparent before:pointer-events-none">

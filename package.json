@@ -1,5 +1,6 @@
 {
   "name": "cogent-x",
+  "author": "Somrit Dasgupta",
   "private": true,
   "version": "1.0.0",
   "type": "module",
