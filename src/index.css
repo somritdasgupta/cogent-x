@@ -1,3 +1,5 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap");
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -7,36 +9,48 @@ All colors MUST be HSL.
 */
 
 @layer base {
+  /* Responsive root font size so components scale proportionally */
+  html {
+    font-size: clamp(13px, 1.6vw, 16px);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-family:
+      "Inter",
+      -apple-system,
+      BlinkMacSystemFont,
+      "Segoe UI",
+      sans-serif;
+  }
   :root {
-    --background: 220 27% 98%;
-    --foreground: 220 13% 9%;
+    --background: 220 30% 98%;
+    --foreground: 222 47% 11%;
 
     --card: 0 0% 100%;
-    --card-foreground: 220 13% 9%;
+    --card-foreground: 222 47% 11%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 220 13% 9%;
+    --popover-foreground: 222 47% 11%;
 
-    --primary: 262 83% 58%;
+    --primary: 250 64% 54%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 220 13% 95%;
-    --secondary-foreground: 220 13% 9%;
+    --secondary: 220 16% 96%;
+    --secondary-foreground: 222 47% 11%;
 
-    --muted: 220 13% 95%;
-    --muted-foreground: 220 9% 46%;
+    --muted: 220 16% 96%;
+    --muted-foreground: 215 16% 47%;
 
-    --accent: 262 83% 96%;
-    --accent-foreground: 262 83% 15%;
+    --accent: 252 100% 97%;
+    --accent-foreground: 252 74% 20%;
 
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 220 13% 91%;
-    --input: 220 13% 91%;
-    --ring: 262 83% 58%;
+    --border: 220 20% 90%;
+    --input: 220 20% 90%;
+    --ring: 252 82% 58%;
 
-    --ai-gradient: linear-gradient(135deg, hsl(262 83% 58%), hsl(285 85% 65%));
+    --ai-gradient: linear-gradient(135deg, hsl(250 64% 54%), hsl(282 50% 60%));
     --success: 142 76% 36%;
     --success-foreground: 0 0% 100%;
     --warning: 38 92% 50%;
@@ -64,35 +78,35 @@ All colors MUST be HSL.
   }
 
   .dark {
-    --background: 220 27% 4%;
-    --foreground: 220 27% 98%;
+    --background: 224 32% 5%;
+    --foreground: 220 20% 98%;
 
-    --card: 220 27% 6%;
-    --card-foreground: 220 27% 98%;
+    --card: 224 30% 7%;
+    --card-foreground: 220 20% 98%;
 
-    --popover: 220 27% 6%;
-    --popover-foreground: 220 27% 98%;
+    --popover: 224 30% 7%;
+    --popover-foreground: 220 20% 98%;
 
-    --primary: 262 83% 58%;
+    --primary: 250 68% 60%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 220 13% 14%;
-    --secondary-foreground: 220 27% 98%;
+    --secondary: 224 18% 14%;
+    --secondary-foreground: 220 20% 98%;
 
-    --muted: 220 13% 14%;
-    --muted-foreground: 220 9% 65%;
+    --muted: 224 18% 14%;
+    --muted-foreground: 220 11% 65%;
 
-    --accent: 262 83% 15%;
-    --accent-foreground: 262 83% 96%;
+    --accent: 252 45% 15%;
+    --accent-foreground: 252 100% 97%;
 
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 220 13% 14%;
-    --input: 220 13% 14%;
-    --ring: 262 83% 58%;
+    --border: 224 18% 16%;
+    --input: 224 18% 16%;
+    --ring: 252 82% 66%;
 
-    --ai-gradient: linear-gradient(135deg, hsl(262 83% 58%), hsl(285 85% 65%));
+    --ai-gradient: linear-gradient(135deg, hsl(250 68% 60%), hsl(282 55% 64%));
     --success: 142 76% 36%;
     --success-foreground: 0 0% 100%;
     --warning: 38 92% 50%;
@@ -116,7 +130,44 @@ All colors MUST be HSL.
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply min-h-screen bg-background text-foreground antialiased;
+    overflow: hidden;
+    height: 100vh;
+    font-family:
+      "Inter",
+      -apple-system,
+      BlinkMacSystemFont,
+      "Segoe UI",
+      sans-serif;
+    background:
+      radial-gradient(
+        circle at 15% 15%,
+        hsl(250 64% 54% / 0.12),
+        transparent 35%
+      ),
+      radial-gradient(
+        circle at 85% 10%,
+        hsl(282 50% 60% / 0.1),
+        transparent 30%
+      ),
+      radial-gradient(
+        circle at 50% 90%,
+        hsl(198 92% 60% / 0.08),
+        transparent 32%
+      ),
+      radial-gradient(
+        circle at 40% 50%,
+        hsl(250 64% 54% / 0.05),
+        transparent 40%
+      ),
+      hsl(var(--background));
+    background-attachment: fixed;
+  }
+
+  #root {
+    height: 100vh;
+    width: 100%;
+    overflow: hidden;
   }
 
   /* Markdown prose styles */
@@ -188,6 +239,57 @@ All colors MUST be HSL.
   .prose a {
     @apply text-primary hover:underline;
   }
+
+  /* Prevent horizontal overflow on prose elements */
+  .prose {
+    @apply overflow-hidden;
+  }
+
+  .prose p,
+  .prose li,
+  .prose blockquote {
+    @apply break-words;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+  }
+
+  .prose code {
+    @apply break-all;
+  }
+
+  .prose pre {
+    @apply overflow-x-auto;
+  }
+
+  /* Ensure all inline elements wrap properly */
+  .prose a {
+    @apply break-words;
+  }
+
+  .app-noise {
+    background-image: radial-gradient(
+      circle,
+      hsl(var(--foreground) / 0.08) 1px,
+      transparent 1px
+    );
+    background-size: 18px 18px;
+  }
+
+  .app-frost {
+    @apply border border-border/60 bg-background/70 backdrop-blur-2xl shadow-[0_20px_80px_-30px_rgba(15,23,42,0.35)];
+  }
+
+  .app-panel {
+    @apply rounded-3xl border border-border/70 bg-card/75 backdrop-blur-2xl shadow-[0_18px_60px_-30px_rgba(15,23,42,0.25)];
+  }
+
+  .app-surface {
+    @apply rounded-xl border border-border/60 bg-background/60 backdrop-blur-xl;
+  }
+
+  .app-pill {
+    @apply inline-flex items-center gap-2 rounded-full border border-border/60 bg-background/80 px-3 py-1 text-xs font-medium text-muted-foreground backdrop-blur;
+  }
 }
 
 /* Custom animations for floating elements */
@@ -238,8 +340,8 @@ All colors MUST be HSL.
 
 /* Create the animated border using box-shadow layers */
 .neon-border-wrapper {
-  --trail-color: rgba(59, 130, 246, 1);
-  --trail-glow: rgba(96, 165, 250, 0.6);
+  --trail-color: rgba(59, 130, 246, 0.36);
+  --trail-glow: rgba(96, 165, 250, 0.22);
 }
 
 /* Animated gradient border effect */
@@ -261,11 +363,11 @@ All colors MUST be HSL.
     90deg,
     transparent 0%,
     transparent 40%,
-    rgba(59, 130, 246, 0.4) 45%,
-    rgba(96, 165, 250, 0.8) 50%,
-    rgba(59, 130, 246, 1) 52%,
-    rgba(96, 165, 250, 0.8) 54%,
-    rgba(59, 130, 246, 0.4) 59%,
+    rgba(59, 130, 246, 0.18) 45%,
+    rgba(96, 165, 250, 0.4) 50%,
+    rgba(59, 130, 246, 0.6) 52%,
+    rgba(96, 165, 250, 0.4) 54%,
+    rgba(59, 130, 246, 0.18) 59%,
     transparent 64%,
     transparent 100%
   );
@@ -279,11 +381,39 @@ All colors MUST be HSL.
     linear-gradient(#fff 0 0);
   mask-composite: exclude;
   padding: 3px;
-  animation: border-trail 3s linear infinite;
+  animation: border-trail 8s linear infinite;
   pointer-events: none;
   z-index: 0;
-  filter: drop-shadow(0 0 8px rgba(59, 130, 246, 0.6))
-    drop-shadow(0 0 12px rgba(96, 165, 250, 0.4));
+  filter: drop-shadow(0 0 6px rgba(59, 130, 246, 0.28))
+    drop-shadow(0 0 8px rgba(96, 165, 250, 0.18));
+}
+
+/* Bottom-sheet / mobile panel styling for consistent depth */
+.bottom-sheet {
+  border-radius: 1rem 1rem 0 0;
+  box-shadow:
+    0 -20px 50px rgba(2, 6, 23, 0.25),
+    0 -6px 20px rgba(2, 6, 23, 0.12);
+  transform-origin: bottom center;
+  backface-visibility: hidden;
+}
+
+.bottom-sheet-scroll {
+  max-height: 78vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Subtle floating panel shadow used for desktop side panels */
+.panel-float-shadow::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.02),
+    0 6px 20px rgba(2, 6, 23, 0.06);
+  border-radius: inherit;
 }
 
 @keyframes spin {
@@ -316,12 +446,315 @@ All colors MUST be HSL.
   animation: blob 20s infinite;
 }
 
+@keyframes drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(0, -12px, 0);
+  }
+}
+
+.animate-drift {
+  animation: drift 10s ease-in-out infinite;
+}
+
+@keyframes border-flow {
+  0%,
+  100% {
+    opacity: 0.6;
+    filter: hue-rotate(0deg) brightness(1.1);
+  }
+  50% {
+    opacity: 0.8;
+    filter: hue-rotate(20deg) brightness(1.3);
+  }
+}
+
+.animate-border-flow {
+  animation: border-flow 4s ease-in-out infinite;
+}
+
+/* Sleek neon glow animation */
+@keyframes neon-glow {
+  0%,
+  100% {
+    box-shadow:
+      0 0 10px rgba(59, 130, 246, 0.14),
+      0 0 20px rgba(96, 165, 250, 0.06),
+      inset 0 0 8px rgba(59, 130, 246, 0.03);
+  }
+  50% {
+    box-shadow:
+      0 0 16px rgba(59, 130, 246, 0.22),
+      0 0 30px rgba(96, 165, 250, 0.1),
+      inset 0 0 12px rgba(59, 130, 246, 0.06);
+  }
+}
+
+.animate-neon-glow {
+  animation: neon-glow 8s ease-in-out infinite;
+}
+
+/* Refined avatar glow */
+@keyframes avatar-glow {
+  0%,
+  100% {
+    box-shadow:
+      0 0 10px rgba(59, 130, 246, 0.18),
+      0 0 18px rgba(96, 165, 250, 0.08);
+  }
+  50% {
+    box-shadow:
+      0 0 14px rgba(59, 130, 246, 0.26),
+      0 0 28px rgba(96, 165, 250, 0.12);
+  }
+}
+
+.animate-avatar-glow {
+  animation: avatar-glow 4s ease-in-out infinite;
+}
+
+/* Refined enter animation - more professional */
+@keyframes enter-scale {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.animate-enter-scale {
+  animation: enter-scale 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Smooth grow animation */
+@keyframes enter-grow {
+  from {
+    opacity: 0;
+    max-height: 0;
+  }
+  to {
+    opacity: 1;
+    max-height: 1000px;
+  }
+}
+
+.animate-enter-grow {
+  animation: enter-grow 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
 .animation-delay-2000 {
   animation-delay: 2s;
 }
 
 .animation-delay-4000 {
   animation-delay: 4s;
+}
+
+.animation-delay-150 {
+  animation-delay: 150ms;
+}
+
+.animation-delay-300 {
+  animation-delay: 300ms;
+}
+
+.animation-delay-500 {
+  animation-delay: 500ms;
+}
+
+.bg-size-200 {
+  background-size: 200% 200%;
+}
+
+/* Shimmer animation for text and headers - SLOW and READABLE */
+@keyframes shimmer {
+  0% {
+    background-position: -800px 0;
+  }
+  50% {
+    background-position: 800px 0;
+  }
+  100% {
+    background-position: -800px 0;
+  }
+}
+
+.animate-shimmer {
+  background: linear-gradient(
+    120deg,
+    currentColor,
+    currentColor 30%,
+    rgba(255, 255, 255, 0.08) 50%,
+    currentColor 70%,
+    currentColor
+  );
+  background-size: 200% 100%;
+  animation: shimmer 8s ease-in-out infinite;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Text reveal animation for streaming */
+@keyframes text-reveal {
+  0% {
+    opacity: 0;
+    clip-path: inset(0 100% 0 0);
+  }
+  50% {
+    opacity: 0.5;
+    clip-path: inset(0 50% 0 0);
+  }
+  100% {
+    opacity: 1;
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+.animate-text-reveal {
+  animation: text-reveal 0.5s ease-in-out forwards;
+}
+
+/* Streaming text caret and masking */
+@keyframes caret-blink {
+  0%,
+  50% {
+    opacity: 1;
+  }
+  51%,
+  100% {
+    opacity: 0;
+  }
+}
+
+.streaming {
+  position: relative;
+  display: inline-block;
+  color: inherit;
+}
+
+.streaming-visible {
+  white-space: pre-wrap;
+}
+
+.streaming-hidden {
+  visibility: hidden;
+  white-space: pre-wrap;
+}
+
+.streaming::after {
+  content: "";
+  position: absolute;
+  right: -0.15rem;
+  width: 1.5px;
+  height: 1em;
+  background: hsl(var(--primary-foreground));
+  border-radius: 1px;
+  transform-origin: bottom;
+  animation: caret-blink 1s steps(1) infinite;
+  opacity: 0.9;
+}
+
+/* Word-by-word reveal */
+@keyframes word-fade-in {
+  0% {
+    opacity: 0;
+  }
+  50% {
+    opacity: 0.5;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+.animate-word-in {
+  animation: word-fade-in 0.5s ease-in-out forwards;
+}
+
+/* Cascade reveal for prose elements (line-by-line reveal) */
+@keyframes prose-line-reveal {
+  0% {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  50% {
+    opacity: 0.5;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.prose > p:nth-child(1) {
+  animation: prose-line-reveal 0.5s ease-out forwards;
+}
+
+.prose > p:nth-child(2) {
+  animation: prose-line-reveal 0.5s ease-out forwards;
+  animation-delay: 100ms;
+}
+
+.prose > p:nth-child(3) {
+  animation: prose-line-reveal 0.5s ease-out forwards;
+  animation-delay: 200ms;
+}
+
+.prose > p:nth-child(4) {
+  animation: prose-line-reveal 0.5s ease-out forwards;
+  animation-delay: 300ms;
+}
+
+.prose > p:nth-child(5) {
+  animation: prose-line-reveal 0.5s ease-out forwards;
+  animation-delay: 400ms;
+}
+
+.prose > p:nth-child(6) {
+  animation: prose-line-reveal 0.5s ease-out forwards;
+  animation-delay: 500ms;
+}
+
+.prose > p:nth-child(7) {
+  animation: prose-line-reveal 0.5s ease-out forwards;
+  animation-delay: 600ms;
+}
+
+.prose > p:nth-child(8) {
+  animation: prose-line-reveal 0.5s ease-out forwards;
+  animation-delay: 700ms;
+}
+
+.prose > p:nth-child(9) {
+  animation: prose-line-reveal 0.5s ease-out forwards;
+  animation-delay: 800ms;
+}
+
+.prose > p:nth-child(10) {
+  animation: prose-line-reveal 0.5s ease-out forwards;
+  animation-delay: 900ms;
+}
+
+/* Streaming/typewriter effect for code blocks */
+@keyframes code-reveal {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+.prose > pre {
+  animation: code-reveal 0.6s ease-out forwards;
 }
 
 /* Performance optimizations */
@@ -342,6 +775,77 @@ All colors MUST be HSL.
 .transition-smooth {
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   will-change: auto;
+}
+
+.glass-button {
+  @apply rounded-full border border-border/60 bg-background/75 text-foreground shadow-sm backdrop-blur-xl transition-all hover:-translate-y-0.5 hover:bg-background/90 hover:shadow-md;
+}
+
+.chat-chip {
+  @apply inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-background/70 px-3 py-1.5 text-xs font-medium text-muted-foreground backdrop-blur-xl transition-all hover:border-primary/30 hover:text-foreground;
+}
+
+.chat-bubble-user {
+  @apply rounded-xl rounded-tr-md border border-primary/20 bg-card/85 px-3 py-2 sm:px-4 sm:py-3 text-primary-foreground shadow-[0_10px_30px_-18px_rgba(59,130,246,0.08)];
+}
+
+.chat-bubble-assistant {
+  @apply rounded-[1.25rem] rounded-tl-md border border-border/70 bg-card/80 px-3 py-2 sm:px-4 sm:py-3 text-foreground shadow-[0_20px_60px_-35px_rgba(15,23,42,0.35)] backdrop-blur-xl;
+}
+
+.settings-shell {
+  @apply text-foreground;
+}
+
+.settings-shell .bg-slate-900\/50,
+.settings-shell .bg-slate-900\/40,
+.settings-shell .bg-slate-900,
+.settings-shell .bg-slate-800\/50,
+.settings-shell .bg-slate-800\/40,
+.settings-shell .bg-slate-800 {
+  background: hsl(var(--card) / 0.72) !important;
+  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(24px);
+}
+
+.settings-shell .border-slate-800,
+.settings-shell .border-slate-700 {
+  border-color: hsl(var(--border) / 0.75) !important;
+}
+
+.settings-shell .text-slate-300,
+.settings-shell .text-slate-400,
+.settings-shell .text-slate-500,
+.settings-shell .text-slate-600,
+.settings-shell .text-slate-700 {
+  color: hsl(var(--muted-foreground)) !important;
+}
+
+.settings-shell .text-sky-400,
+.settings-shell .text-sky-500 {
+  color: hsl(var(--primary)) !important;
+}
+
+.settings-shell .bg-sky-500,
+.settings-shell .bg-sky-600 {
+  background: hsl(var(--primary)) !important;
+}
+
+.settings-shell .bg-sky-500\/40,
+.settings-shell .bg-sky-500\/30,
+.settings-shell .bg-sky-500\/20 {
+  background: hsl(var(--primary) / 0.25) !important;
+}
+
+.settings-shell .shadow-sky-500\/40,
+.settings-shell .shadow-sky-500\/30,
+.settings-shell .shadow-sky-500\/20 {
+  box-shadow: 0 20px 60px -30px hsl(var(--primary) / 0.35) !important;
+}
+
+.settings-shell .bg-green-50,
+.settings-shell .dark\:bg-green-950\/30 {
+  background: hsl(142 76% 36% / 0.12) !important;
 }
 
 /* Prevent flash of unstyled content */

@@ -27,6 +27,7 @@ export const API_ENDPOINTS = {
   DATABASE_SOURCE: "/api/v1/database/source",
   DATABASE_SOURCE_DELETE: "/api/v1/database/source",
   DATABASE_SOURCE_CHUNKS: "/api/v1/database/source/chunks",
+  CHAT_STATS: "/api/v1/database/chat-stats",
   ASK: "/api/v1/ask",
   SESSION_INFO: "/api/v1/session/info",
   SESSION_DELETE: "/api/v1/session",

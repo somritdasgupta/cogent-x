@@ -75,9 +75,11 @@ export const DocumentIngestionPanel = () => {
   );
 
   return (
-    <Card className="w-full">
+    <Card className="app-panel w-full">
       <CardHeader className="pb-3 px-4 sm:px-6">
-        <CardTitle className="text-base sm:text-lg">Knowledge Base</CardTitle>
+        <CardTitle className="text-base font-semibold sm:text-lg">
+          Knowledge Base
+        </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4 px-4 sm:px-6">
         <form onSubmit={handleIngestion} className="space-y-3">
@@ -87,12 +89,12 @@ export const DocumentIngestionPanel = () => {
             onChange={(e) => setUrl(e.target.value)}
             placeholder="Enter documentation URL to ingest"
             disabled={isProcessing}
-            className="text-sm"
+            className="h-11 rounded-xl border-border/70 bg-background/80 px-4 text-sm shadow-sm"
           />
 
           <Button
             type="submit"
-            className="w-full text-sm"
+            className="w-full rounded-xl bg-gradient-to-r from-primary to-fuchsia-500 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-95"
             disabled={isProcessing || !url.trim()}
           >
             {isProcessing ? (
@@ -109,18 +111,20 @@ export const DocumentIngestionPanel = () => {
           </Button>
         </form>
 
-        <Separator />
+        <Separator className="bg-border/70" />
 
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <h4 className="text-sm font-medium">Available Sources</h4>
+            <h4 className="text-sm font-semibold text-foreground/90">
+              Available Sources
+            </h4>
             {isLoadingKB && (
               <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
             )}
           </div>
 
           {!isLoadingKB && knowledgeBases.length === 0 ? (
-            <p className="text-xs text-muted-foreground py-2">
+            <p className="py-2 text-xs text-muted-foreground">
               No knowledge bases ingested yet. Add a URL above to get started.
             </p>
           ) : (
@@ -129,11 +133,11 @@ export const DocumentIngestionPanel = () => {
                 <Badge
                   key={`${kb}-${index}`}
                   variant="secondary"
-                  className="text-xs flex items-center gap-1.5 px-2 py-1 max-w-full"
+                  className="flex max-w-full items-center gap-1.5 rounded-full border border-border/60 bg-background/80 px-2 py-1 text-xs text-foreground"
                 >
                   <FileText className="h-3 w-3 flex-shrink-0" />
                   <span
-                    className="truncate max-w-[150px] sm:max-w-[250px]"
+                    className="max-w-[150px] truncate sm:max-w-[250px]"
                     title={kb}
                   >
                     {kb}

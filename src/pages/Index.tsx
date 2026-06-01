@@ -1,9 +1,9 @@
-import QueryInterface from "@/components/QueryInterface";
+import ModernWorkspace from "@/components/ModernWorkspace";
 
 const Index = () => (
-  <div className="min-h-screen bg-background flex flex-col">
-    <main className="flex-1 flex flex-col overflow-hidden">
-      <QueryInterface />
+  <div className="h-[100dvh] overflow-hidden bg-background flex flex-col">
+    <main className="min-h-0 flex-1 flex flex-col overflow-hidden">
+      <ModernWorkspace />
     </main>
   </div>
 );

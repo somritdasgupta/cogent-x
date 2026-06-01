@@ -1075,6 +1075,29 @@ async def list_sources(x_session_id: Optional[str] = Header(None)):
         return {"sources": []}
 
 
+@app.get("/api/v1/database/chat-stats")
+async def get_chat_statistics(x_session_id: Optional[str] = Header(None)):
+    """Get document counts per conversation/chat"""
+    try:
+        if not x_session_id:
+            return {"chat_stats": {}, "message": "No session found"}
+        session_db = session_manager.get_session(x_session_id)
+        if not session_db:
+            return {"chat_stats": {}, "message": "Session expired"}
+        
+        # Count documents per conversation
+        chat_doc_counts = {}
+        for metadata in session_db.metadatas:
+            if metadata:
+                conv_id = metadata.get("conversation_id", "default")
+                chat_doc_counts[conv_id] = chat_doc_counts.get(conv_id, 0) + 1
+        
+        return {"chat_stats": chat_doc_counts, "session_id": x_session_id}
+    except:
+        return {"chat_stats": {}}
+
+
+
 @app.get("/api/v1/database/source/chunks")
 async def get_source_chunks(url: str, x_session_id: Optional[str] = Header(None)):
     try:

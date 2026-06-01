@@ -6,14 +6,23 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Drawer,
+  DrawerContent,
+  DrawerDescription,
+  DrawerTitle,
+} from "@/components/ui/drawer";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { Loader2, Search } from "lucide-react";
+import { Database, FileText, Loader2, Search } from "lucide-react";
 import { API_ENDPOINTS, apiGet } from "@/config/api";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { cn } from "@/lib/utils";
 
 interface SourceChunk {
   content: string;
@@ -28,6 +37,7 @@ interface SourceModalProps {
 }
 
 export const SourceModal = ({ url, usedChunks, onClose }: SourceModalProps) => {
+  const isMobile = useIsMobile();
   const [chunks, setChunks] = useState<SourceChunk[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -62,7 +72,7 @@ export const SourceModal = ({ url, usedChunks, onClose }: SourceModalProps) => {
 
   useEffect(() => {
     if (url) {
-      loadChunks(url);
+      void loadChunks(url);
     } else {
       setChunks([]);
       setSearchQuery("");
@@ -70,54 +80,90 @@ export const SourceModal = ({ url, usedChunks, onClose }: SourceModalProps) => {
     }
   }, [url, loadChunks]);
 
-  return (
-    <Dialog open={url !== null} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-3xl max-h-[80vh] flex flex-col">
-        <DialogHeader>
-          <DialogTitle>Source Chunks</DialogTitle>
-          <DialogDescription className="break-all">{url}</DialogDescription>
-        </DialogHeader>
+  const usedCount = useMemo(() => {
+    if (!usedChunks.length || !chunks.length) return 0;
+    return chunks.filter((chunk) => usedChunks.includes(chunk.index)).length;
+  }, [chunks, usedChunks]);
 
-        <div className="space-y-3">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              type="text"
-              placeholder="Search chunks..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10"
-            />
-          </div>
+  const sourceHost = useMemo(() => {
+    if (!url) return "Unknown source";
+    try {
+      return new URL(url).hostname;
+    } catch {
+      return "Custom source";
+    }
+  }, [url]);
 
-          {usedChunks.length > 0 && (
-            <>
-              <Separator />
-              <div className="flex items-center justify-between">
-                <Label htmlFor="show-used" className="text-sm">
-                  Show only used chunks
-                </Label>
-                <Switch
-                  id="show-used"
-                  checked={showOnlyUsed}
-                  onCheckedChange={setShowOnlyUsed}
-                />
-              </div>
-            </>
-          )}
+  const content = (
+    <div className="flex min-h-0 flex-1 flex-col gap-4 px-5 py-4">
+      <div className="space-y-3">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            type="text"
+            placeholder="Search chunks..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-10"
+          />
         </div>
 
-        {isLoading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin" />
+        <Separator />
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge
+              variant="secondary"
+              className="rounded-full border border-border/40 bg-background/70"
+            >
+              <Database className="mr-1.5 h-3 w-3" />
+              {chunks.length} total
+            </Badge>
+            {usedChunks.length > 0 && (
+              <Badge
+                variant="secondary"
+                className="rounded-full border border-primary/30 bg-primary/10 text-primary"
+              >
+                <FileText className="mr-1.5 h-3 w-3" />
+                {usedCount} used
+              </Badge>
+            )}
           </div>
-        ) : (
-          <div className="flex-1 overflow-y-auto space-y-3 mt-4">
+          {usedChunks.length > 0 && (
+            <div className="flex items-center gap-2">
+              <Label
+                htmlFor="show-used"
+                className="text-xs text-muted-foreground"
+              >
+                Used only
+              </Label>
+              <Switch
+                id="show-used"
+                checked={showOnlyUsed}
+                onCheckedChange={setShowOnlyUsed}
+              />
+            </div>
+          )}
+        </div>
+      </div>
+
+      {isLoading ? (
+        <div className="flex min-h-0 flex-1 items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin" />
+        </div>
+      ) : (
+        <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+          <div className="space-y-3 pb-1">
             {filteredChunks.map((chunk, idx) => {
               const isUsed = usedChunks.includes(chunk.index);
               return (
-                <Card key={idx} className={isUsed ? "border-primary" : ""}>
-                  <CardContent className="pt-4 space-y-3">
+                <Card
+                  key={`${chunk.index}-${idx}`}
+                  className={cn(
+                    "rounded-2xl border border-border/40 bg-card/90 backdrop-blur-xl",
+                    isUsed ? "border-primary/50 bg-primary/5" : "",
+                  )}
+                >
+                  <CardContent className="space-y-3 pt-4">
                     <div className="flex items-center justify-between">
                       <div className="flex gap-2">
                         <Badge variant={isUsed ? "default" : "outline"}>
@@ -129,7 +175,7 @@ export const SourceModal = ({ url, usedChunks, onClose }: SourceModalProps) => {
                         Index: {chunk.index}
                       </span>
                     </div>
-                    <p className="text-sm whitespace-pre-wrap">
+                    <p className="text-sm whitespace-pre-wrap text-foreground/90">
                       {chunk.content}
                     </p>
                     {chunk.metadata &&
@@ -166,7 +212,43 @@ export const SourceModal = ({ url, usedChunks, onClose }: SourceModalProps) => {
               </Card>
             )}
           </div>
-        )}
+        </div>
+      )}
+    </div>
+  );
+
+  if (isMobile) {
+    return (
+      <Drawer open={url !== null} onOpenChange={(open) => !open && onClose()}>
+        <DrawerContent className="max-h-[94vh] border border-primary/20 bg-gradient-to-b from-background/95 via-background/90 to-background/95 p-0 shadow-2xl overflow-hidden rounded-t-[2rem]">
+          <div className="flex h-[94vh] min-h-0 flex-col overflow-hidden px-3 pb-3 pt-3">
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[1.5rem] border border-primary/20 bg-card/80">
+              <div className="border-b border-border/20 px-5 py-4">
+                <DrawerDescription className="mt-1 break-all italic text-left text-sm text-muted-foreground">
+                  {url}
+                </DrawerDescription>
+              </div>
+
+              {content}
+            </div>
+          </div>
+        </DrawerContent>
+      </Drawer>
+    );
+  }
+
+  return (
+    <Dialog open={url !== null} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="flex flex-col max-w-[900px] w-[92vw] max-h-[calc(100vh-2rem)] p-0 gap-0 overflow-hidden bg-gradient-to-br from-background/95 via-background/90 to-background/95 backdrop-blur-2xl border border-primary/30 sm:rounded-xl shadow-2xl before:absolute before:inset-0 before:bg-gradient-to-br before:from-primary/5 before:via-transparent before:to-transparent before:pointer-events-none">
+        <div className="flex items-start justify-between gap-4 border-b border-border/20 px-5 py-4">
+          <DialogHeader className="space-y-1 text-left">
+            <DialogDescription className="break-all italic text-sm text-muted-foreground">
+              {url}
+            </DialogDescription>
+          </DialogHeader>
+        </div>
+
+        {content}
       </DialogContent>
     </Dialog>
   );
